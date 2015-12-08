@@ -12,7 +12,9 @@
          drracket/private/syncheck/traversals
          (for-template racket/base) ;was a test, did not work
          syntax/to-string
-         "code-walker.rkt")
+         "languageRefactorings/racket-refactorings.rkt"
+         "languageRefactorings/python-refactorings.rkt"
+         "code-walker.rkt") 
 (provide tool@)
 (define not-expanded-program null)
 (define expanded-program null)
@@ -27,7 +29,9 @@
         (inherit get-button-panel
                  get-definitions-text
                  get-current-tab
-                 get-interactions-text)
+                 get-interactions-text
+                 get-editor%
+                 )
         (inherit register-toolbar-button)
         (define (set-syncheck-running-mode mode)
           (cond
@@ -58,7 +62,7 @@
         
         (define current-syncheck-running-mode #f)
         
-        (define (refactoring-syntax text tab interactions refactoring? #:print-extra-info? [print-extra-info? #f])
+        (define (refactoring-syntax text tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f])
           (define definitions-text text)
           (define interactions-text interactions)
           (define drs-eventspace (current-eventspace))
@@ -246,7 +250,7 @@
                                   'drracket:check-syntax:status status-coloring-program)
                                (parameterize ([current-annotations definitions-text])
                                  (begin
-                                   #;(syntax-refactoring sexp #t text start-selection end-selection start-line end-line last-line)
+                                   #;(syntax-refactoring sexp #t text start-selection end-selection start-line end-line last-line (get-editor%))
                                    (parameterize ((print-syntax-width 9000))
                                      (displayln sexp))
                                    (expanded-expression sexp)))
@@ -267,25 +271,48 @@
                        (custodian-shutdown-all user-custodian)]
                       [else
                        (displayln sexp)
-                       (syntax-refactoring sexp #f text start-selection end-selection start-line end-line last-line)
+                       (syntax-refactoring sexp #f text start-selection end-selection start-line end-line last-line auto-refactoring?)
                        (parameterize ((print-syntax-width 9000))
                          (displayln sexp))
                        (displayln not-expanded-program)
                        (loop)])) 
                   #t)))))
+        (define refactoring-menu  (new menu% [label "Refactoring Menu"] [parent (send (send (send (get-definitions-text) get-tab) get-frame) get-menu-bar)]))
+        (append-editor-operation-menu-items refactoring-menu #t)
+        (when search-refactoring
+          (make-object menu-item%
+            ;(get-refactoring-string)
+            "Detect/Clear Refactorings"
+            refactoring-menu
+            (λ (item evt)
+              (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #f))))
+        #;(unless search-refactoring
+            (make-object menu-item%
+              ;(get-refactoring-string)
+              "Clear Refactorings"
+              refactoring-menu
+              (λ (item evt)
+                (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #f))))
+        (make-object menu-item%
+          ;(get-refactoring-string)
+          "Automatic Refactoring"
+          refactoring-menu
+          (λ (item evt)
+            (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #f #:auto-refactoring #t)))
+        
         (define (create-refactoring-menu menu bool)
           (define refactoring-menu
             (make-object menu%
               "Refactoring Test Plugin"
               menu))
+          #;(make-object menu-item%
+              ;(get-refactoring-string)
+              "Refactoring If"
+              refactoring-menu
+              (λ (item evt)
+                (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #t)))
           (make-object menu-item%
-            ;(get-refactoring-string)
-            "Refactoring If"
-            refactoring-menu
-            (λ (item evt)
-              (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #t)))
-          (make-object menu-item%
-            "Refactoring If V2"
+            "Refactoring operations"
             refactoring-menu
             (λ (item evt)
               (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #f)))
@@ -296,14 +323,22 @@
              (old menu editor event)
              (create-refactoring-menu menu #f))))))
     (define search-refactoring #t)
-    (define (syntax-refactoring program expanded? text start-selection end-selection start-line end-line last-line )
+    (define (syntax-refactoring program expanded? text start-selection end-selection start-line end-line last-line auto-refactoring)
       (define arg null)
       (define (write-back aux-stx)
-        (parameterize ((print-as-expression #f)
-                       (pretty-print-columns 80))
-          (send text delete start-selection end-selection)
-          (send text insert (pretty-format (syntax->datum aux-stx)) start-selection 'same)
-          (displayln (pretty-format (syntax->datum aux-stx)))))
+        (unless (void? aux-stx)
+          (parameterize ((print-as-expression #f)
+                         (pretty-print-columns 80))
+            (send text begin-edit-sequence #t #f)
+            (send text delete start-selection end-selection)
+            (send text insert (pretty-format (syntax->datum aux-stx)) start-selection 'same)
+            ;(send (send text get-admin) modified #t)
+            (send (send (send (send text get-tab) get-frame) get-editor) set-modified #t)
+            ;(send (send (send text get-tab) get-frame) modified #t) ;;useless
+            ;(send (send (send text get-tab) get-frame) update-shown)
+            (send text end-edit-sequence)
+            
+            (displayln (pretty-format (syntax->datum aux-stx))))))
       (define (write-python stx)
         (send text delete start-selection end-selection)
         (send text insert stx start-selection 'same)
@@ -313,15 +348,18 @@
         (displayln start)
         (displayln last-line)
         (define aux (code-walker-non-expanded program (+ 1 start) (+ 1 last-line)))
-        (syntax-parse aux
-          ;#:literals ((if if #:phase 2))
-          ;#:literals (if)
-          ;#:literal-sets (xpto)
-          #:datum-literals (if) ;This works
-          [(if test-expr then-expr else-expr) 
-           (when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
-             (send text highlight-range (syntax-position aux) (+ 2 (string-length (syntax->string aux)) (syntax-position aux)) (make-object color% 255 0 0 0.4) #:key 'key))]
-          [_ 'ok])
+        #;(syntax-parse aux
+            ;#:literals ((if if #:phase 2))
+            ;#:literals (if)
+            ;#:literal-sets (xpto)
+            #:datum-literals (if) ;This works
+            [(if test-expr then-expr else-expr) 
+             (when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
+               (send text highlight-range (syntax-position aux) (+ 2 (string-length (syntax->string aux)) (syntax-position aux)) (make-object color% 255 0 0 0.35) #:key 'key))]
+            [_ 'ok])
+        (unless (null? (racket-parser aux))
+          (send text highlight-range (syntax-position aux) (+ 2 (string-length (syntax->string aux)) (syntax-position aux)) (make-object color% 0 255 0 0.35) #:key 'key))
+        
         #;(send text unhighlight-range start end color [caret-space style])
         ;;;;; highlight/display (end start color)
         #;(send text highlight-range 1 5 (make-object color% 255 0 0 1.0))
@@ -339,31 +377,36 @@
               (begin
                 ;;Regarding Refactoring if V2
                 (set! arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line)))
+                (displayln "arg")
                 (displayln arg)
-                (syntax-parse arg
-                  ;#:literals ((if if #:phase 2))
-                  ;#:literals (if)
-                  ;#:literal-sets (xpto)
-                  #:datum-literals (if :False :True expr-stmt) ;This works
-                  [(if test-expr then-expr else-expr) 
-                   (when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
-                     (write-back #'(not test-expr)))]
-                  [(cond ((py-truth (py-lt arg arg2)) (expr-stmt :False)) (else (expr-stmt :True))) 
-                   (write-python (string-append "not(" (syntax->string #'(arg)) "<" (syntax->string #'(arg2)) ")" ))]
-                  )))
+                (displayln "racket-parser")
+                (displayln (racket-parser arg))
+                (write-back (racket-parser arg))
+                #;(syntax-parse arg
+                    ;#:literals ((if if #:phase 2))
+                    ;#:literals (if)
+                    ;#:literal-sets (xpto)
+                    #:datum-literals (if :False :True expr-stmt) ;This works
+                    [(if test-expr then-expr else-expr) 
+                     (when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
+                       (write-back #'(not test-expr)))]
+                    [(cond ((py-truth (py-lt arg arg2)) (expr-stmt :False)) (else (expr-stmt :True))) 
+                     (write-python (string-append "not(" (syntax->string #'(arg)) "<" (syntax->string #'(arg2)) ")" ))])))
           (begin
-            (if search-refactoring
-                (begin 
-                  (set! search-refactoring #f)
-                  (let loop ([start start-line]
-                             [end last-line])
-                    (define aux (search-refactorings start))
-                    (if (= start end)
-                        (displayln "Over")
-                        (loop aux end))))
-                (begin 
-                  (set! search-refactoring #t)
-                  (send text unhighlight-ranges/key 'key)))))) 
+            (if auto-refactoring
+                (void)
+                (if search-refactoring
+                    (begin 
+                      (set! search-refactoring #f)
+                      (let loop ([start start-line]
+                                 [end last-line])
+                        (define aux (search-refactorings start))
+                        (if (= start end)
+                            (displayln "Over")
+                            (loop aux end))))
+                    (begin 
+                      (set! search-refactoring #t)
+                      (send text unhighlight-ranges/key 'key))))))) 
     (define (phase1) 
       (void))
     (define (phase2) (void))

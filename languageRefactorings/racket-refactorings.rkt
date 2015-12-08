@@ -6,67 +6,72 @@
 (define (write-back sexp)
   (displayln "racket-refactorings Test"))
 
-(define racket-parser
-  (syntax-parser
+(define (racket-parser arg)
+  (displayln "inside racket-parser")
+  (displayln arg)
+  (define return null)
+  (syntax-parse arg
     #:datum-literals (cons if not > <= >= < and lambda map length list)
     [(not (> a b))
-     (write-back #'(<= a b))]
+     (set! return #'(<= a b))]
     [(not (<= a b))
-     (write-back #'(> a b))]
+     (set! return #'(> a b))]
     [(not (< a b))
-     (write-back #'(>= a b))]
+     (set! return #'(>= a b))]
     [(not (>= a b))
-     (write-back #'(< a b))]
+     (set! return #'(< a b))]
     [(if test-expr then-expr else-expr)
      (begin
        (when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
-         (write-back #'(not test-expr)))
+         (set! return #'(not test-expr)))
        (when (and (syntax->datum #'then-expr) (not (syntax->datum #'else-expr)))
-         (write-back #'test-expr)))]
+         (set! return #'test-expr)))]
     [(and (< x y) (< v z))
      (when (equal? (syntax->datum #'y) (syntax->datum #'v))
-       (write-back #'(< x y z)))]
+       (set! return #'(< x y z)))]
     [(and (> x y) (> v z))
      (when (equal? (syntax->datum #'y) (syntax->datum #'v))
-       (write-back #'(> x y z)))]
+       (set! return #'(> x y z)))]
     [(cons x (list y v ...))
-     (write-back #'(list x y v ...))]
-    [(= (length l) 0) (write-back #'(null? l))]
+     (set! return #'(list x y v ...))]
+    [(= (length l) 0) (set! return #'(null? l))]
     ;[(= (length l) 1) (write-back #'(singleton? l))] this does not exist?
     ;[(cons x (list y ... v)) (write-back #'(list x y ... v))]
-    [(ft (lambda (arg-aux) (ftn arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2)) (write-back #'(ft ftn arg))]
-    [((lambda (arg-aux) (function arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2)) (write-back #'(function art))]))
+    [(ft (lambda (arg-aux) (ftn arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2)) (set! return #'(ft ftn arg))]
+    [((lambda (arg-aux) (function arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2))  (set! return #'(function art))]
+    [_ (void)])
+  (define (cond-to-if arg) ;;Improve
+    (define (write-if conds thens last-else)
+      (define aux-result null)
+      (define result null)
+      (define (write-aux conds thens)
+        (unless (null? conds)
+          (begin
+            ;(displayln (syntax? conds))
+            (set! aux-result (cons #`(#,(car conds) #,(car thens)) aux-result))
+            (write-aux (cdr conds) (cdr thens))))) 
+      (define (write-to-if aux-result last-else)
+        (define (create-if conds)
+          (if (null? conds)
+              last-else
+              #`(if (#,@(car (syntax-e (car conds))))
+                    #,@(cdr (syntax-e (car conds)))
+                    #,(create-if (cdr conds)))))
+        (create-if aux-result))
+      (write-aux (syntax-e conds) (syntax-e thens))
+      (set! return #`(#,@(write-to-if (reverse aux-result) last-else))))
+    
+    (syntax-parse arg
+      [(cond (~seq (e:expr then-stuff) ... [else stuff]))
+       (begin 
+         #'(e ...)
+         (write-back (write-if #'(e ...) #'(then-stuff ...) #'stuff)))]
+      [_ (void)]))
+  (cond-to-if arg)
+  return)
 
 
-(define (cond-to-if parent text start-selection end-selection start-line end-line binding-aux)
-  (define arg null)
-  (define (write-if conds thens last-else)
-    (define aux-result null)
-    (define result null)
-    (define (write-aux conds thens)
-      (unless (null? conds)
-        (begin
-          ;(displayln (syntax? conds))
-          (set! aux-result (cons #`(#,(car conds) #,(car thens)) aux-result))
-          (write-aux (cdr conds) (cdr thens))))) 
-    (define (write-to-if aux-result last-else)
-      (define (create-if conds)
-        (if (null? conds)
-            last-else
-            #`(if (#,@(car (syntax-e (car conds))))
-                  #,@(cdr (syntax-e (car conds)))
-                  #,(create-if (cdr conds)))))
-      (create-if aux-result))
-    (write-aux (syntax-e conds) (syntax-e thens))
-    (set! result #`(#,@(write-to-if (reverse aux-result) last-else)))
-    #;(displayln (syntax->datum result))
-    result)
-  
-  (syntax-parse arg
-    [(cond (~seq (e:expr then-stuff) ... [else stuff]))
-     (begin 
-       #'(e ...)
-       (write-back (write-if #'(e ...) #'(then-stuff ...) #'stuff)))]))
+
 
 (define (if-to-cond parent text start-selection end-selection start-line end-line binding-aux)
   (define arg null)
@@ -113,7 +118,7 @@
                     [else #, else-aux])))
   (parser1 arg))
 
-
+#|
 ;;;;; named-let to define (create a function)
 ;;; (let proc-id ?x ?y)
 (syntax-parse #'(let* teste ((a 1 ) (b 2)) (begin (+ a b) (+ b a)))
@@ -188,3 +193,4 @@
   [(and (= expr val) (= expr2 val2))
    (when (eq? (syntax->datum #'val) (syntax->datum #'val2))
      (syntax->datum #'(and expr expr2 val)))])
+|#
