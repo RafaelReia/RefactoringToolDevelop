@@ -294,7 +294,8 @@
          (let ([old (keymap:add-to-right-button-menu/before)])
            (λ (menu editor event)
              (old menu editor event)
-             (create-refactoring-menu menu #f))))))  
+             (create-refactoring-menu menu #f))))))
+    (define search-refactoring #t)
     (define (syntax-refactoring program expanded? text start-selection end-selection start-line end-line last-line )
       (define arg null)
       (define (write-back aux-stx)
@@ -307,28 +308,62 @@
         (send text delete start-selection end-selection)
         (send text insert stx start-selection 'same)
         (displayln stx))
-      (unless (= start-line end-line)
-        (if expanded?
-            (syntax-parse (code-walker program (+ 1 start-line) (+ 1 end-line)) ;used for the exapanded program Regarding if
-              #:literals(if)
-              [(call-with-values (lambda () (if test-expr then-expr else-expr)) print-values) 
-               (when (and (not (eval-syntax #'then-expr)) (eval-syntax #'else-expr))
-                 (write-back #'(not test-expr)))])
-            (begin
-              ;;Regarding Refactoring if V2
-              (set! arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line)))
-              (displayln arg)
-              (syntax-parse arg
-                ;#:literals ((if if #:phase 2))
-                ;#:literals (if)
-                ;#:literal-sets (xpto)
-                #:datum-literals (if :False :True expr-stmt) ;This works
-                #;[(if test-expr then-expr else-expr) 
+      
+      (define (search-refactorings start)
+        (displayln start)
+        (displayln last-line)
+        (define aux (code-walker-non-expanded program (+ 1 start) (+ 1 last-line)))
+        (syntax-parse aux
+          ;#:literals ((if if #:phase 2))
+          ;#:literals (if)
+          ;#:literal-sets (xpto)
+          #:datum-literals (if) ;This works
+          [(if test-expr then-expr else-expr) 
+           (when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
+             (send text highlight-range (syntax-position aux) (+ 2 (string-length (syntax->string aux)) (syntax-position aux)) (make-object color% 255 0 0 0.4) #:key 'key))]
+          [_ 'ok])
+        #;(send text unhighlight-range start end color [caret-space style])
+        ;;;;; highlight/display (end start color)
+        #;(send text highlight-range 1 5 (make-object color% 255 0 0 1.0))
+        
+        (displayln "loop")
+        (displayln aux)
+        (+ 1 start))
+      (if (not (= start-line end-line))
+          (if expanded?
+              (syntax-parse (code-walker program (+ 1 start-line) (+ 1 end-line)) ;used for the exapanded program Regarding if
+                #:literals(if)
+                [(call-with-values (lambda () (if test-expr then-expr else-expr)) print-values) 
+                 (when (and (not (eval-syntax #'then-expr)) (eval-syntax #'else-expr))
+                   (write-back #'(not test-expr)))])
+              (begin
+                ;;Regarding Refactoring if V2
+                (set! arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line)))
+                (displayln arg)
+                (syntax-parse arg
+                  ;#:literals ((if if #:phase 2))
+                  ;#:literals (if)
+                  ;#:literal-sets (xpto)
+                  #:datum-literals (if :False :True expr-stmt) ;This works
+                  [(if test-expr then-expr else-expr) 
                    (when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
                      (write-back #'(not test-expr)))]
-                [(cond ((py-truth (py-lt arg arg2)) (expr-stmt :False)) (else (expr-stmt :True))) 
-                 (write-python (string-append "not(" (syntax->string #'(arg)) "<" (syntax->string #'(arg2)) ")" ))]
-                )))))
+                  [(cond ((py-truth (py-lt arg arg2)) (expr-stmt :False)) (else (expr-stmt :True))) 
+                   (write-python (string-append "not(" (syntax->string #'(arg)) "<" (syntax->string #'(arg2)) ")" ))]
+                  )))
+          (begin
+            (if search-refactoring
+                (begin 
+                  (set! search-refactoring #f)
+                  (let loop ([start start-line]
+                             [end last-line])
+                    (define aux (search-refactorings start))
+                    (if (= start end)
+                        (displayln "Over")
+                        (loop aux end))))
+                (begin 
+                  (set! search-refactoring #t)
+                  (send text unhighlight-ranges/key 'key)))))) 
     (define (phase1) 
       (void))
     (define (phase2) (void))
