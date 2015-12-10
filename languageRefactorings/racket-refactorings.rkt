@@ -9,7 +9,7 @@
 (define (racket-parser arg)
   (displayln "inside racket-parser")
   (displayln arg)
-  (define return null)
+  (define return (void))
   (syntax-parse arg
     #:datum-literals (cons if not > <= >= < and lambda map length list)
     [(not (> a b))

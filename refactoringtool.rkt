@@ -62,7 +62,8 @@
         
         (define current-syncheck-running-mode #f)
         
-        (define (refactoring-syntax text tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f])
+        (define (refactoring-syntax text tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f] 
+                                    #:detect-refactorings [detect-refactorings? #f])
           (define definitions-text text)
           (define interactions-text interactions)
           (define drs-eventspace (current-eventspace))
@@ -209,74 +210,103 @@
           (define module-language?
             (is-a? (drracket:language-configuration:language-settings-language settings)
                    drracket:module-language:module-language<%>))
-          (if refactoring?
-              (with-lock/edit-sequence
-               text
-               (λ ()
-                 (drracket:eval:expand-program
-                  #:gui-modules? #f
-                  (drracket:language:make-text/pos text
-                                                   0
-                                                   (send text last-position)) ;;Input
-                  settings
-                  #f;(not module-language?)
-                  init-proc
-                  kill-termination
-                  (λ (sexp loop) ; =user=
-                    (cond
-                      [(eof-object? sexp)
-                       (set! normal-termination? #t)
-                       (parameterize ([current-eventspace drs-eventspace])
-                         (queue-callback
-                          (λ () ; =drs=
-                            (with-lock/edit-sequence
-                             definitions-text
-                             (λ ()
-                               (parameterize ([current-annotations definitions-text])
-                                 (begin
-                                   (expansion-completed)))))
-                            (cleanup)
-                            (custodian-shutdown-all user-custodian))))]
-                      [else
-                       (unless module-language?
-                         (eval-compile-time-part-of-top-level sexp))
-                       (parameterize ([current-eventspace drs-eventspace])
-                         (queue-callback
-                          (λ () ; =drs=
-                            (with-lock/edit-sequence
-                             definitions-text
-                             (λ ()
-                               #;(update-status-line 
-                                  'drracket:check-syntax:status status-coloring-program)
-                               (parameterize ([current-annotations definitions-text])
-                                 (begin
-                                   #;(syntax-refactoring sexp #t text start-selection end-selection start-line end-line last-line (get-editor%))
-                                   (parameterize ((print-syntax-width 9000))
-                                     (displayln sexp))
-                                   (expanded-expression sexp)))
-                               #;(close-status-line 'drracket:check-syntax:status))))))
-                       (loop)])))))
-              ((λ ()
-                 ((drracket:eval:traverse-program/multiple
-                   #:gui-modules? #f
-                   settings
-                   init-proc
-                   kill-termination)
-                  (drracket:language:make-text/pos text
-                                                   0
-                                                   (send text last-position))
-                  (λ (sexp loop) ;this is the "iter"
-                    (cond
-                      [(eof-object? sexp)
-                       (custodian-shutdown-all user-custodian)]
-                      [else
-                       (displayln sexp)
-                       (syntax-refactoring sexp #f text start-selection end-selection start-line end-line last-line auto-refactoring?)
-                       (parameterize ((print-syntax-width 9000))
-                         (displayln sexp))
-                       (displayln not-expanded-program)
-                       (loop)])) 
-                  #t)))))
+          
+          (define (automated-refactoring start-line)
+            ((λ ()
+               ((drracket:eval:traverse-program/multiple
+                 #:gui-modules? #f
+                 settings
+                 init-proc
+                 kill-termination)
+                (drracket:language:make-text/pos text
+                                                 0
+                                                 (send text last-position))
+                (λ (sexp loop) ;this is the "iter"
+                  (cond
+                    [(eof-object? sexp)
+                     (custodian-shutdown-all user-custodian)]
+                    [else
+                     (displayln sexp)
+                     (syntax-refactoring sexp #f text start-selection end-selection start-line last-line last-line auto-refactoring? detect-refactorings?)
+                     (parameterize ((print-syntax-width 9000))
+                       (displayln sexp))
+                     (displayln not-expanded-program)
+                     (loop)])) 
+                #t)))
+            (unless (>= start-line last-line)
+              (automated-refactoring (+ 1 start-line))))
+          
+          (when auto-refactoring?
+            (automated-refactoring 0))
+          (unless auto-refactoring?
+            (if refactoring?
+                (with-lock/edit-sequence
+                 text
+                 (λ ()
+                   (drracket:eval:expand-program
+                    #:gui-modules? #f
+                    (drracket:language:make-text/pos text
+                                                     0
+                                                     (send text last-position)) ;;Input
+                    settings
+                    #f;(not module-language?)
+                    init-proc
+                    kill-termination
+                    (λ (sexp loop) ; =user=
+                      (cond
+                        [(eof-object? sexp)
+                         (set! normal-termination? #t)
+                         (parameterize ([current-eventspace drs-eventspace])
+                           (queue-callback
+                            (λ () ; =drs=
+                              (with-lock/edit-sequence
+                               definitions-text
+                               (λ ()
+                                 (parameterize ([current-annotations definitions-text])
+                                   (begin
+                                     (expansion-completed)))))
+                              (cleanup)
+                              (custodian-shutdown-all user-custodian))))]
+                        [else
+                         (unless module-language?
+                           (eval-compile-time-part-of-top-level sexp))
+                         (parameterize ([current-eventspace drs-eventspace])
+                           (queue-callback
+                            (λ () ; =drs=
+                              (with-lock/edit-sequence
+                               definitions-text
+                               (λ ()
+                                 #;(update-status-line 
+                                    'drracket:check-syntax:status status-coloring-program)
+                                 (parameterize ([current-annotations definitions-text])
+                                   (begin
+                                     #;(syntax-refactoring sexp #t text start-selection end-selection start-line end-line last-line (get-editor%))
+                                     (parameterize ((print-syntax-width 9000))
+                                       (displayln sexp))
+                                     (expanded-expression sexp)))
+                                 #;(close-status-line 'drracket:check-syntax:status))))))
+                         (loop)])))))
+                ((λ ()
+                   ((drracket:eval:traverse-program/multiple
+                     #:gui-modules? #f
+                     settings
+                     init-proc
+                     kill-termination)
+                    (drracket:language:make-text/pos text
+                                                     0
+                                                     (send text last-position))
+                    (λ (sexp loop) ;this is the "iter"
+                      (cond
+                        [(eof-object? sexp)
+                         (custodian-shutdown-all user-custodian)]
+                        [else
+                         (displayln sexp)
+                         (syntax-refactoring sexp #f text start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings?)
+                         (parameterize ((print-syntax-width 9000))
+                           (displayln sexp))
+                         (displayln not-expanded-program)
+                         (loop)])) 
+                    #t))))))
         (define refactoring-menu  (new menu% [label "Refactoring Menu"] [parent (send (send (send (get-definitions-text) get-tab) get-frame) get-menu-bar)]))
         (append-editor-operation-menu-items refactoring-menu #t)
         (when search-refactoring
@@ -285,7 +315,7 @@
             "Detect/Clear Refactorings"
             refactoring-menu
             (λ (item evt)
-              (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #f))))
+              (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #f #:detect-refactorings #t))))
         #;(unless search-refactoring
             (make-object menu-item%
               ;(get-refactoring-string)
@@ -323,9 +353,13 @@
              (old menu editor event)
              (create-refactoring-menu menu #f))))))
     (define search-refactoring #t)
-    (define (syntax-refactoring program expanded? text start-selection end-selection start-line end-line last-line auto-refactoring)
+    (define (syntax-refactoring program expanded? text start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings?)
+      (displayln "syntax-refactoring tests")
+      (displayln start-selection)
+      (displayln end-selection)     
+      
       (define arg null)
-      (define (write-back aux-stx)
+      #;(define (write-back aux-stx)
         (unless (void? aux-stx)
           (parameterize ((print-as-expression #f)
                          (pretty-print-columns 80))
@@ -336,9 +370,36 @@
             (send (send (send (send text get-tab) get-frame) get-editor) set-modified #t)
             ;(send (send (send text get-tab) get-frame) modified #t) ;;useless
             ;(send (send (send text get-tab) get-frame) update-shown)
-            (send text end-edit-sequence)
-            
+            (send text end-edit-sequence) 
             (displayln (pretty-format (syntax->datum aux-stx))))))
+      
+      (define (write-back aux-stx aux)
+        (if auto-refactoring?
+            ;(- (syntax-position aux) 1) (+ 3 (string-length (syntax->string aux)) (syntax-position aux))
+            (unless (void? aux-stx)
+            (parameterize ((print-as-expression #f)
+                             (pretty-print-columns 80))
+              (send text begin-edit-sequence #t #f)
+                (send text delete (- (syntax-position aux) 1) (+ 3 (string-length (syntax->string aux)) (syntax-position aux)))
+                (send text insert (pretty-format (syntax->datum aux-stx)) (- (syntax-position aux) 1) 'same)
+                ;(send (send text get-admin) modified #t)
+                (send (send (send (send text get-tab) get-frame) get-editor) set-modified #t)
+                ;(send (send (send text get-tab) get-frame) modified #t) ;;useless
+                ;(send (send (send text get-tab) get-frame) update-shown)
+                (send text end-edit-sequence)
+                (displayln (pretty-format (syntax->datum aux-stx)))))
+            (unless (void? aux-stx)
+              (parameterize ((print-as-expression #f)
+                             (pretty-print-columns 80))
+                (send text begin-edit-sequence #t #f)
+                (send text delete start-selection end-selection)
+                (send text insert (pretty-format (syntax->datum aux-stx)) start-selection 'same)
+                ;(send (send text get-admin) modified #t)
+                (send (send (send (send text get-tab) get-frame) get-editor) set-modified #t)
+                ;(send (send (send text get-tab) get-frame) modified #t) ;;useless
+                ;(send (send (send text get-tab) get-frame) update-shown)
+                (send text end-edit-sequence)
+                (displayln (pretty-format (syntax->datum aux-stx)))))))
       (define (write-python stx)
         (send text delete start-selection end-selection)
         (send text insert stx start-selection 'same)
@@ -357,7 +418,7 @@
              (when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
                (send text highlight-range (syntax-position aux) (+ 2 (string-length (syntax->string aux)) (syntax-position aux)) (make-object color% 255 0 0 0.35) #:key 'key))]
             [_ 'ok])
-        (unless (null? (racket-parser aux))
+        (unless (void? (racket-parser aux))
           (send text highlight-range (syntax-position aux) (+ 2 (string-length (syntax->string aux)) (syntax-position aux)) (make-object color% 0 255 0 0.35) #:key 'key))
         
         #;(send text unhighlight-range start end color [caret-space style])
@@ -367,7 +428,7 @@
         (displayln "loop")
         (displayln aux)
         (+ 1 start))
-      (if (not (= start-line end-line))
+      (if (not detect-refactorings?) #;(not (= start-selection end-selection))
           (if expanded?
               (syntax-parse (code-walker program (+ 1 start-line) (+ 1 end-line)) ;used for the exapanded program Regarding if
                 #:literals(if)
@@ -381,7 +442,7 @@
                 (displayln arg)
                 (displayln "racket-parser")
                 (displayln (racket-parser arg))
-                (write-back (racket-parser arg))
+                (write-back (racket-parser arg) arg)
                 #;(syntax-parse arg
                     ;#:literals ((if if #:phase 2))
                     ;#:literals (if)
@@ -393,7 +454,7 @@
                     [(cond ((py-truth (py-lt arg arg2)) (expr-stmt :False)) (else (expr-stmt :True))) 
                      (write-python (string-append "not(" (syntax->string #'(arg)) "<" (syntax->string #'(arg2)) ")" ))])))
           (begin
-            (if auto-refactoring
+            (if auto-refactoring?
                 (void)
                 (if search-refactoring
                     (begin 
