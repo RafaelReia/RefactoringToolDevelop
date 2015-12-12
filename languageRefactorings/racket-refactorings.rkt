@@ -37,7 +37,7 @@
     [(= (length l) 0) (set! return #'(null? l))]
     ;[(= (length l) 1) (write-back #'(singleton? l))] this does not exist?
     ;[(cons x (list y ... v)) (write-back #'(list x y ... v))]
-    [(ft (lambda (arg-aux) (ftn arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2)) (set! return #'(ft ftn arg))]
+    [(ft (lambda (arg-aux) (ftn arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2)) (set! return #'(ft ftn arg))] ;this has a bug.
     [((lambda (arg-aux) (function arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2))  (set! return #'(function art))]
     [_ (void)])
   (define (cond-to-if arg) ;;Improve
@@ -62,6 +62,7 @@
       (set! return #`(#,@(write-to-if (reverse aux-result) last-else))))
     
     (syntax-parse arg
+      #:datum-literals(cond)
       [(cond (~seq (e:expr then-stuff) ... [else stuff]))
        (begin 
          #'(e ...)
