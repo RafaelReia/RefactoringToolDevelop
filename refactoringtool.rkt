@@ -62,9 +62,10 @@
         
         (define current-syncheck-running-mode #f)
         
-        (define (refactoring-syntax text tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f] 
+        (define (refactoring-syntax tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f] 
                                     #:detect-refactorings [detect-refactorings? #f])
-          (define definitions-text text)
+          (define definitions-text (get-definitions-text))
+          (define text (get-definitions-text))
           (define interactions-text interactions)
           (define drs-eventspace (current-eventspace))
           (define the-tab (get-current-tab))
@@ -227,7 +228,7 @@
                      (custodian-shutdown-all user-custodian)]
                     [else
                      (displayln sexp)
-                     (syntax-refactoring sexp #f text start-selection end-selection start-line last-line last-line auto-refactoring? detect-refactorings?)
+                     (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line last-line last-line auto-refactoring? detect-refactorings?)
                      (parameterize ((print-syntax-width 9000))
                        (displayln sexp))
                      (displayln not-expanded-program)
@@ -236,6 +237,9 @@
             (unless (>= start-line last-line)
               (automated-refactoring (+ 1 start-line))))
           
+          (send text begin-edit-sequence)
+          (send text insert " " (send text last-position))
+          (send text delete (- (send text last-position) 1) (send text last-position))
           (when auto-refactoring?
             (automated-refactoring 0))
           (unless auto-refactoring?
@@ -280,7 +284,7 @@
                                     'drracket:check-syntax:status status-coloring-program)
                                  (parameterize ([current-annotations definitions-text])
                                    (begin
-                                     #;(syntax-refactoring sexp #t text start-selection end-selection start-line end-line last-line (get-editor%))
+                                     #;(syntax-refactoring sexp #t (get-definitions-text) start-selection end-selection start-line end-line last-line (get-editor%))
                                      (parameterize ((print-syntax-width 9000))
                                        (displayln sexp))
                                      (expanded-expression sexp)))
@@ -301,12 +305,14 @@
                          (custodian-shutdown-all user-custodian)]
                         [else
                          (displayln sexp)
-                         (syntax-refactoring sexp #f text start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings?)
                          (parameterize ((print-syntax-width 9000))
                            (displayln sexp))
                          (displayln not-expanded-program)
+                         (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings?)
+                         
                          (loop)])) 
-                    #t))))))
+                    #t)))))
+          (send text end-edit-sequence))
         (define refactoring-menu  (new menu% [label "Refactoring Menu"] [parent (send (send (send (get-definitions-text) get-tab) get-frame) get-menu-bar)]))
         (append-editor-operation-menu-items refactoring-menu #t)
         (when search-refactoring
@@ -315,37 +321,24 @@
             "Detect/Clear Refactorings"
             refactoring-menu
             (λ (item evt)
-              (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #f #:detect-refactorings #t))))
-        #;(unless search-refactoring
-            (make-object menu-item%
-              ;(get-refactoring-string)
-              "Clear Refactorings"
-              refactoring-menu
-              (λ (item evt)
-                (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #f))))
+              (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #t))))
         (make-object menu-item%
           ;(get-refactoring-string)
           "Automatic Refactoring"
           refactoring-menu
           (λ (item evt)
-            (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #f #:auto-refactoring #t)))
+            (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:auto-refactoring #t)))
         
         (define (create-refactoring-menu menu bool)
           (define refactoring-menu
             (make-object menu%
               "Refactoring Test Plugin"
               menu))
-          #;(make-object menu-item%
-              ;(get-refactoring-string)
-              "Refactoring If"
-              refactoring-menu
-              (λ (item evt)
-                (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #t)))
           (make-object menu-item%
             "Refactoring operations"
             refactoring-menu
             (λ (item evt)
-              (refactoring-syntax (get-definitions-text) (get-current-tab) (get-interactions-text) #f)))
+              (refactoring-syntax (get-current-tab) (get-interactions-text) #f)))
           (void))
         (keymap:add-to-right-button-menu/before
          (let ([old (keymap:add-to-right-button-menu/before)])
@@ -359,47 +352,21 @@
       (displayln end-selection)     
       
       (define arg null)
-      #;(define (write-back aux-stx)
-        (unless (void? aux-stx)
-          (parameterize ((print-as-expression #f)
-                         (pretty-print-columns 80))
-            (send text begin-edit-sequence #t #f)
-            (send text delete start-selection end-selection)
-            (send text insert (pretty-format (syntax->datum aux-stx)) start-selection 'same)
-            ;(send (send text get-admin) modified #t)
-            (send (send (send (send text get-tab) get-frame) get-editor) set-modified #t)
-            ;(send (send (send text get-tab) get-frame) modified #t) ;;useless
-            ;(send (send (send text get-tab) get-frame) update-shown)
-            (send text end-edit-sequence) 
-            (displayln (pretty-format (syntax->datum aux-stx))))))
-      
       (define (write-back aux-stx aux)
         (if auto-refactoring?
             ;(- (syntax-position aux) 1) (+ 3 (string-length (syntax->string aux)) (syntax-position aux))
             (unless (void? aux-stx)
-            (parameterize ((print-as-expression #f)
+              (parameterize ((print-as-expression #f)
                              (pretty-print-columns 80))
-              (send text begin-edit-sequence #t #f)
                 (send text delete (- (syntax-position aux) 1) (+ 3 (string-length (syntax->string aux)) (syntax-position aux)))
-                (send text insert (pretty-format (syntax->datum aux-stx)) (- (syntax-position aux) 1) 'same)
-                ;(send (send text get-admin) modified #t)
-                (send (send (send (send text get-tab) get-frame) get-editor) set-modified #t)
-                ;(send (send (send text get-tab) get-frame) modified #t) ;;useless
-                ;(send (send (send text get-tab) get-frame) update-shown)
-                (send text end-edit-sequence)
+                (send text insert (pretty-format (syntax->datum aux-stx)) (- (syntax-position aux) 1))
                 (displayln (pretty-format (syntax->datum aux-stx)))))
             (unless (void? aux-stx)
               (parameterize ((print-as-expression #f)
-                             (pretty-print-columns 80))
-                (send text begin-edit-sequence #t #f)
-                (send text delete start-selection end-selection)
-                (send text insert (pretty-format (syntax->datum aux-stx)) start-selection 'same)
-                ;(send (send text get-admin) modified #t)
-                (send (send (send (send text get-tab) get-frame) get-editor) set-modified #t)
-                ;(send (send (send text get-tab) get-frame) modified #t) ;;useless
-                ;(send (send (send text get-tab) get-frame) update-shown)
-                (send text end-edit-sequence)
-                (displayln (pretty-format (syntax->datum aux-stx)))))))
+                               (pretty-print-columns 80))
+                  (send text delete start-selection end-selection)
+                  (send text insert (pretty-format (syntax->datum aux-stx)) start-selection)
+                  #;(displayln (pretty-format (syntax->datum aux-stx)))))))
       (define (write-python stx)
         (send text delete start-selection end-selection)
         (send text insert stx start-selection 'same)
