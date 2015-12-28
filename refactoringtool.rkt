@@ -64,7 +64,7 @@
         (define current-syncheck-running-mode #f)
         
         (define (refactoring-syntax tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f] 
-                                    #:detect-refactorings [detect-refactorings? #f] #:get-refactoring-string [get-refactoring-string #f])
+                                    #:detect-refactorings [detect-refactorings? #f] #:get-refactoring-string [get-refactoring-string #f] #:check-refactorings [check-refactorings? #f])
           (define definitions-text (get-definitions-text))
           (define text (get-definitions-text))
           (define interactions-text interactions)
@@ -213,6 +213,175 @@
             (is-a? (drracket:language-configuration:language-settings-language settings)
                    drracket:module-language:module-language<%>))
           
+          
+          (define (check-similar start-line)
+            (displayln "check-similar")
+            (define (search-similiar sexp randombool text start-selection end-selection 
+                                     start-line end-line last-line check-refactorings?)
+              
+              (define (compare-syntax userSelected autoSelected)
+                ;;; add a boolean that comapres values or not
+                ;;; end cases, a #f or userStacl and autoStack both reach null at the same time
+                (define userStack null)
+                (define autoStack null)
+                (define (compare-aux userSelected autoSelected)
+                  (cond [(or (null? userSelected) (null? autoSelected))
+                         (displayln "It's null")
+                         (if (and (null? userSelected) (null? autoSelected))
+                             (cond [(and (null? userStack) (null? autoStack)) #t]
+                                   #;[(and (identifier? userStack) (identifier? autoStack))]
+                                   [(and (pair? userStack) (pair? autoStack))
+                                    (set! userSelected (car userStack))
+                                    (set! autoSelected (car autoStack))
+                                    (set! userStack (cdr userStack))
+                                    (set! autoStack (cdr autoStack))
+                                    (compare-aux userSelected autoSelected)]
+                                   [(and (syntax? userStack) (syntax? autoStack))
+                                    (set! userSelected (syntax-e userStack))
+                                    (set! autoSelected (syntax-e autoStack))
+                                    (set! userStack (list))
+                                    (set! autoStack (list))]
+                                   [else #f])
+                             #f)]
+                        #;[stop? (displayln "evaluation stopped")]
+                        [(or (identifier? userSelected) (identifier? autoSelected))
+                         (displayln "identifier!")
+                         (if (and (identifier? userSelected) (identifier? autoSelected))
+                             (if (free-identifier=? userSelected autoSelected #f #f) ;;check this
+                                 ;;not sure if any stack is null
+                                 (begin 
+                                 (displayln "FREE-IDENTIFIER")
+                                 (displayln (identifier-binding userSelected #f))
+                                 (displayln (identifier-binding autoSelected #f))
+                                   (displayln userSelected)
+                                 (displayln autoSelected)
+                                 
+                                   (cond [(and (null? userStack) (null? autoStack)) #t]
+                                         [(null? userStack) #f]
+                                         [(null? autoStack) #f]
+                                         [(and (pair? userStack) (pair? autoStack))
+                                          (set! userSelected (car userStack))
+                                          (set! autoSelected (car autoStack))
+                                          (set! userStack (cdr userStack))
+                                          (set! autoStack (cdr autoStack))
+                                          (compare-aux userSelected autoSelected)]
+                                         [(and (syntax? userStack) (syntax? autoStack))
+                                          (displayln "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+                                          (displayln "this should not happen!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                                          (set! userSelected (syntax-e userSelected))
+                                          (set! autoSelected (syntax-e autoStack))
+                                          (set! userStack (list))
+                                          (set! autoStack (list))
+                                          (compare-aux userSelected autoSelected)]
+                                         [else #f]))
+                                 #f)
+                             #f)]
+                        [(or (pair? userSelected) (pair? autoSelected))
+                         (displayln "It's pair")
+                         (if (and (pair? userSelected) (pair? autoSelected))
+                             (begin
+                               (set! userStack (cons (cdr userSelected) userStack)) ;;add to stack
+                               (set! userSelected (car userSelected))
+                               (set! autoStack (cons (cdr autoSelected) autoStack)) ;;add to stack
+                               (set! autoSelected (car autoSelected))
+                               (compare-aux userSelected autoSelected))
+                             #f)]
+                        [(or (syntax? userSelected) (syntax? autoSelected))
+                         (displayln "In Syntax")
+                         (if (and (syntax? userSelected) (syntax? autoSelected))
+                             (compare-aux (syntax-e userSelected) (syntax-e autoSelected))
+                             #f)]
+                        [else
+                         (displayln "else")
+                         (if (equal? userSelected autoSelected)
+                             (begin
+                               (displayln "equal?")
+                               (displayln userSelected)
+                               (displayln userStack)
+                               (displayln autoSelected)
+                               (displayln autoStack)
+                               (cond [(and (null? userStack) (null? autoStack)) 
+                                      #t]
+                                     [(null? userStack) #f]
+                                     [(null? autoStack) #f]
+                                     [(and (pair? userStack) (pair? autoStack))
+                                      (set! userSelected (car userStack))
+                                      (set! autoSelected (car autoStack))
+                                      (set! userStack (cdr userStack))
+                                      (set! autoStack (cdr autoStack))
+                                      (compare-aux userSelected autoSelected)]
+                                     [(and (syntax? userStack) (syntax? autoStack))
+                                      (displayln "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+                                      (displayln "this should not happen!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                                      (set! userSelected (syntax-e userSelected))
+                                      (set! autoSelected (syntax-e autoStack))
+                                      (set! userStack (list))
+                                      (set! autoStack (list))
+                                      (compare-aux userSelected autoSelected)]
+                                     [else #f]))
+                             #f)]))
+                (compare-aux userSelected autoSelected))
+              
+              ;;;from the selected argument try and extract a "form"
+              ;;;get-selected argument
+              (define program sexp)
+              (define selected-expressions (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line)))
+              ;;;create "rule" get essentials of the "form" (is the "best" way)
+              ;;; or dumb way, compare for exact matches
+              (define (search-refactorings start)
+                (displayln start)
+                (displayln last-line)
+                (define aux (code-walker-non-expanded program (+ 1 start) (+ 1 last-line)))
+                #;(unless (void? (racket-parser selected-expressions))
+                    (send text highlight-range (syntax-position selected-expressions) 
+                          (+ 2 (string-length (syntax->string aux)) (syntax-position selected-expressions)) (make-object color% 0 255 0 0.35) #:key 'key))
+                ;;; aux is the form to compare with
+                ;;; selected-expression is the form have
+                (define result (compare-syntax selected-expressions aux))
+                (when result
+                  ;;; there is a match
+                  (displayln "match found!!")
+                  (send text highlight-range (syntax-position selected-expressions) 
+                        (+ 2 (string-length (syntax->string aux)) (syntax-position selected-expressions)) (make-object color% 0 255 0 0.35) #:key 'key)
+                  (send text highlight-range (syntax-position aux) 
+                        (+ 2 (string-length (syntax->string aux)) (syntax-position aux)) (make-object color% 0 200 0 0.25) #:key 'key))
+                #;(send text unhighlight-range start end color [caret-space style])
+                ;;;;; highlight/display (end start color)
+                #;(send text highlight-range 1 5 (make-object color% 255 0 0 1.0))
+                
+                (displayln "loop")
+                (displayln aux)
+                (if (= (+ 1 start) last-line)
+                    (displayln "Over")
+                    (search-refactorings (+ 1 start))))
+              
+              (search-refactorings start-line))
+            (define (search-similar-aux)
+              ((λ ()
+                 ((drracket:eval:traverse-program/multiple
+                   #:gui-modules? #f
+                   settings
+                   init-proc
+                   kill-termination)
+                  (drracket:language:make-text/pos text
+                                                   0
+                                                   (send text last-position))
+                  (λ (sexp loop) ;this is the "iter"
+                    (cond
+                      [(eof-object? sexp)
+                       (custodian-shutdown-all user-custodian)]
+                      [else
+                       (displayln sexp)
+                       (search-similiar sexp #f text start-selection end-selection 
+                                        start-line last-line last-line check-refactorings?)
+                       (parameterize ((print-syntax-width 9000))
+                         (displayln sexp))
+                       (displayln not-expanded-program)
+                       (loop)])) 
+                  #t))))
+            (send clear enable #t)
+            (search-similar-aux))
+          
           (define (automated-refactoring start-line)
             (send text begin-edit-sequence)
             (send text insert " " (send text last-position))
@@ -249,7 +418,10 @@
           
           (when auto-refactoring?
             (automated-refactoring 0))
-          (unless (or get-refactoring-string auto-refactoring?)
+          (when check-refactorings?
+            (check-similar start-line))
+          
+          (unless (or get-refactoring-string auto-refactoring? check-refactorings?)
             (if refactoring?
                 (with-lock/edit-sequence
                  text
@@ -361,6 +533,13 @@
                 refactoring-menu
                 (λ (item evt)
                   (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #t))))
+        (make-object menu-item%
+          ;(get-refactoring-string)
+          "Check Refactoring"
+          refactoring-menu
+          (λ (item evt)
+            (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #f #:check-refactorings #t)))
+        
         (set! clear 
               (make-object menu-item%
                 ;(get-refactoring-string)
@@ -378,7 +557,7 @@
                 (λ (item evt)
                   (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:auto-refactoring #t))))
         
-        (send AutomaticRefactoring enable #f)
+        (send AutomaticRefactoring enable #t)
         
         (define (create-refactoring-menu menu bool)
           (define refactoring-menu
