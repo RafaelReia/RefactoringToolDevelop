@@ -218,10 +218,11 @@
             (displayln "check-similar")
             (define (search-similiar sexp randombool text start-selection end-selection 
                                      start-line end-line last-line check-refactorings?)
-              
+              (displayln "search-similar")
               (define (compare-syntax userSelected autoSelected)
                 ;;; add a boolean that comapres values or not
                 ;;; end cases, a #f or userStacl and autoStack both reach null at the same time
+                (displayln "compare-syntax")
                 (define userStack null)
                 (define autoStack null)
                 (define (compare-aux userSelected autoSelected)
@@ -250,12 +251,12 @@
                              (if (free-identifier=? userSelected autoSelected #f #f) ;;check this
                                  ;;not sure if any stack is null
                                  (begin 
-                                 (displayln "FREE-IDENTIFIER")
-                                 (displayln (identifier-binding userSelected #f))
-                                 (displayln (identifier-binding autoSelected #f))
+                                   (displayln "FREE-IDENTIFIER")
+                                   (displayln (identifier-binding userSelected #f))
+                                   (displayln (identifier-binding autoSelected #f))
                                    (displayln userSelected)
-                                 (displayln autoSelected)
-                                 
+                                   (displayln autoSelected)
+                                   
                                    (cond [(and (null? userStack) (null? autoStack)) #t]
                                          [(null? userStack) #f]
                                          [(null? autoStack) #f]
@@ -325,60 +326,151 @@
               ;;;from the selected argument try and extract a "form"
               ;;;get-selected argument
               (define program sexp)
-              (define selected-expressions (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line)))
+              (displayln "before code-walker")
+              (define selected-expressions (code-walker program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
+              (displayln "after code-walker")
               ;;;create "rule" get essentials of the "form" (is the "best" way)
               ;;; or dumb way, compare for exact matches
+              (define (highlight-selected aux-sexp)
+                (displayln "before traverse")
+                (displayln (length aux-sexp))
+                (define (highlight-selected-aux aux-sexp sexp)
+                  (let loop ((aux-sexp aux-sexp)
+                             (sexp sexp))
+                    (unless (null? aux-sexp)
+                      (displayln "painting!")
+                      (let ((stx-highlight (code-walker-non-expanded sexp (syntax-line (car aux-sexp)) (+ 1 last-line) (+ 1 last-line))))
+                        (send text highlight-range (syntax-position stx-highlight) 
+                              (+ 2 (string-length (syntax->string stx-highlight)) (syntax-position stx-highlight)) (make-object color% 0 255 0 0.35) #:key 'key))
+                      (loop (cdr aux-sexp) sexp))))
+                ((λ ()
+                   ((drracket:eval:traverse-program/multiple
+                     #:gui-modules? #f
+                     settings
+                     void
+                     void)
+                    (drracket:language:make-text/pos text
+                                                     0
+                                                     (send text last-position))
+                    (λ (sexp loop) ;this is the "iter"
+                      (cond
+                        [(eof-object? sexp)
+                         (custodian-shutdown-all user-custodian)]
+                        [else
+                         (displayln "else painting")
+                         (highlight-selected-aux aux-sexp sexp)
+                         (loop)])) 
+                    #t))))
+              (define to-highlight-list (list))
               (define (search-refactorings start)
-                (displayln start)
-                (displayln last-line)
-                (define aux (code-walker-non-expanded program (+ 1 start) (+ 1 last-line)))
-                #;(unless (void? (racket-parser selected-expressions))
-                    (send text highlight-range (syntax-position selected-expressions) 
-                          (+ 2 (string-length (syntax->string aux)) (syntax-position selected-expressions)) (make-object color% 0 255 0 0.35) #:key 'key))
+                (displayln "search-refactorings!")
+                (define aux (code-walker program (+ 1 start) (+ 1 last-line) (+ 1 last-line)))
                 ;;; aux is the form to compare with
                 ;;; selected-expression is the form have
+                (displayln "compare syntax")
                 (define result (compare-syntax selected-expressions aux))
                 (when result
                   ;;; there is a match
                   (displayln "match found!!")
-                  (send text highlight-range (syntax-position selected-expressions) 
-                        (+ 2 (string-length (syntax->string aux)) (syntax-position selected-expressions)) (make-object color% 0 255 0 0.35) #:key 'key)
-                  (send text highlight-range (syntax-position aux) 
-                        (+ 2 (string-length (syntax->string aux)) (syntax-position aux)) (make-object color% 0 200 0 0.25) #:key 'key))
+                  ;;;; (get list of positions, put that on a list)
+                  ;;;;; in the end call specialized function, paint all of the list
+                  
+                  #;(parameterize ((print-syntax-width 9000))
+                      (displayln selected-expressions)
+                      (displayln (string-length (syntax->string  selected-expressions)))
+                      (displayln (cdr (syntax-e (cdr (syntax-e selected-expressions)))))
+                      (displayln (string-length (syntax->string
+                                                 (car (cdr (syntax-e (cdr (syntax-e selected-expressions))))))))
+                      (displayln (string-length (syntax->string
+                                                 (car (cdr (cdr (syntax-e (cdr (syntax-e selected-expressions))))))))))
+                  (set! to-highlight-list (cons aux to-highlight-list))
+                  
+                  #;(send text highlight-range (syntax-position selected-expressions) 
+                          (+ 2 (string-length (syntax->string aux)) (syntax-position selected-expressions)) (make-object color% 0 255 0 0.35) #:key 'key)
+                  #;(send text highlight-range (syntax-position aux) 
+                          (+ 2 (string-length (syntax->string aux)) (syntax-position aux)) (make-object color% 0 200 0 0.25) #:key 'key))
                 #;(send text unhighlight-range start end color [caret-space style])
                 ;;;;; highlight/display (end start color)
                 #;(send text highlight-range 1 5 (make-object color% 255 0 0 1.0))
                 
                 (displayln "loop")
                 (displayln aux)
-                (if (= (+ 1 start) last-line)
-                    (displayln "Over")
+                (if (= (+ 1 start) (+ 1 last-line))
+                    (begin
+                      (displayln "Over")
+                      ;;;call the function to highlight all the necessary areas :D
+                      (displayln to-highlight-list)
+                      (highlight-selected to-highlight-list))
                     (search-refactorings (+ 1 start))))
-              
+              (displayln "before call")
               (search-refactorings start-line))
             (define (search-similar-aux)
-              ((λ ()
-                 ((drracket:eval:traverse-program/multiple
-                   #:gui-modules? #f
-                   settings
-                   init-proc
-                   kill-termination)
+              (with-lock/edit-sequence
+               text
+               (λ ()
+                 (drracket:eval:expand-program
+                  #:gui-modules? #f
                   (drracket:language:make-text/pos text
                                                    0
-                                                   (send text last-position))
-                  (λ (sexp loop) ;this is the "iter"
+                                                   (send text last-position)) ;;Input
+                  settings
+                  #f;(not module-language?)
+                  init-proc
+                  kill-termination
+                  (λ (sexp loop) ; =user=
                     (cond
                       [(eof-object? sexp)
-                       (custodian-shutdown-all user-custodian)]
+                       (set! normal-termination? #t)
+                       (parameterize ([current-eventspace drs-eventspace])
+                         (queue-callback
+                          (λ () ; =drs=
+                            (with-lock/edit-sequence
+                             definitions-text
+                             (λ ()
+                               (parameterize ([current-annotations definitions-text])
+                                 (begin
+                                   (expansion-completed)))))
+                            (cleanup)
+                            (custodian-shutdown-all user-custodian))))]
                       [else
-                       (displayln sexp)
-                       (search-similiar sexp #f text start-selection end-selection 
-                                        start-line last-line last-line check-refactorings?)
-                       (parameterize ((print-syntax-width 9000))
-                         (displayln sexp))
-                       (displayln not-expanded-program)
-                       (loop)])) 
-                  #t))))
+                       (unless module-language?
+                         (eval-compile-time-part-of-top-level sexp))
+                       (parameterize ([current-eventspace drs-eventspace])
+                         (queue-callback
+                          (λ () ; =drs=
+                            (with-lock/edit-sequence
+                             definitions-text
+                             (λ ()
+                               #;(update-status-line 
+                                  'drracket:check-syntax:status status-coloring-program)
+                               (displayln "?????????????????????? expanding program ??????????????????")
+                               (search-similiar sexp #f text start-selection end-selection 
+                                                start-line last-line last-line check-refactorings?))))))
+                       (loop)]))))))
+            
+            #;(define (search-similar-aux)
+                ((λ ()
+                   ((drracket:eval:traverse-program/multiple
+                     #:gui-modules? #f
+                     settings
+                     init-proc
+                     kill-termination)
+                    (drracket:language:make-text/pos text
+                                                     0
+                                                     (send text last-position))
+                    (λ (sexp loop) ;this is the "iter"
+                      (cond
+                        [(eof-object? sexp)
+                         (custodian-shutdown-all user-custodian)]
+                        [else
+                         (displayln sexp)
+                         (search-similiar sexp #f text start-selection end-selection 
+                                          start-line last-line last-line check-refactorings?)
+                         (parameterize ((print-syntax-width 9000))
+                           (displayln sexp))
+                         (displayln not-expanded-program)
+                         (loop)])) 
+                    #t))))
             (send clear enable #t)
             (search-similar-aux))
           
@@ -618,7 +710,7 @@
       (define (search-refactorings-highlight start)
         (displayln start)
         (displayln last-line)
-        (define aux (code-walker-non-expanded program (+ 1 start) (+ 1 last-line)))
+        (define aux (code-walker-non-expanded program (+ 1 start) (+ 1 last-line) (+ 1 last-line)))
         (unless (void? (racket-parser aux))
           (if (regexp-match #rx"(\n)" (syntax->string aux))            
               (send text highlight-range (- (syntax-position aux) 1) (+ 1 (string-length (syntax->string aux)) (syntax-position aux) 
@@ -632,7 +724,7 @@
       (define (search-refactorings program start-line end-line)
         (if (= start-line end-line)
             (send RefactoringOperations set-label "None Available")
-            (let*(( arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line)))
+            (let*(( arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
                   (racket-stx (racket-parser arg))
                   (python-stx (python-parser arg)))
               (display "RACKET: ")
@@ -651,14 +743,14 @@
           (search-refactorings program start-line end-line)
           (if (not detect-refactorings?)
               (if expanded?
-                  (syntax-parse (code-walker program (+ 1 start-line) (+ 1 end-line)) ;used for the exapanded program Regarding if
+                  (syntax-parse (code-walker program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)) ;used for the exapanded program Regarding if
                     #:literals(if)
                     [(call-with-values (lambda () (if test-expr then-expr else-expr)) print-values) 
                      (when (and (not (eval-syntax #'then-expr)) (eval-syntax #'else-expr))
                        (write-back #'(not test-expr)))])
                   (begin
                     ;;Regarding Refactoring if V2
-                    (set! arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line)))
+                    (set! arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
                     (displayln "arg")
                     (displayln arg)
                     (displayln "racket-parser")

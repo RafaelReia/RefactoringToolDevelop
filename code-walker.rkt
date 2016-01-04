@@ -2,25 +2,27 @@
 (provide code-walker
          code-walker-non-expanded);805 linhas inicio
 
-(define (code-walker code start end) ;;for the expanded version
+(define (code-walker code start end lastline) ;;for the expanded version
   (define start-line start)
   (define end-line end)
-  (define aux (get-syntax-aux code start-line end-line))
+  (define aux (get-syntax-aux code start-line end-line lastline))
+  (unless (null? aux)
   (parameterize ((print-syntax-width 9000))
     (displayln (cdr (syntax-e aux)))) ;;clean #%app
-  (cdr (syntax-e aux)))
+  (syntax-e aux))
+  aux)
 
-(define (code-walker-non-expanded code start end)
+(define (code-walker-non-expanded code start end lastline)
   (define start-line start)
   (define end-line end)
-  #;(displayln (syntax-e code))
-  #;(displayln " NON EXPANDED")
-  (define result (get-syntax-aux code start-line end-line))
-  #;(displayln "result")
-  #;(displayln result)
+  (displayln (syntax-e code))
+  (displayln " NON EXPANDED")
+  (define result (get-syntax-aux code start-line end-line lastline))
+  (displayln "result")
+  (displayln result)
   result)
 
-(define (get-syntax-aux program start end)
+(define (get-syntax-aux program start end lastline)
   (define stop? #f)
   (define source-stack (list))
   (define aux-result null)
@@ -29,14 +31,16 @@
     (define check-line #t)
     (define result null)
     (define aux-result? #t)
-    #;(displayln "source-aux is syntax? ")
-    #;(displayln (syntax? source-aux))
+    (displayln "source-aux is syntax? ")
+    (displayln (syntax? source-aux))
     #;(parameterize ((print-syntax-width 9000))
       (displayln source-aux)
       (displayln source-stack))
     (define (get-next-compare source-aux source-stack)
       ;else says its bigger than the last part of the selection, could be the end of the program either. this happens when there is no next element.
-      #;(displayln "NEXT COMPARE")
+      (displayln "SOURCE-AUX")
+      (displayln source-aux)
+      (displayln "NEXT COMPARE")
       (define aux (+ end 1))
       #;(parameterize ((print-syntax-width 9000))
         (displayln source-stack)
@@ -51,10 +55,11 @@
             (set! aux -1)))
       aux)
     (cond [(null? source-aux)
-           #;(displayln "It's null")]
+           (set! stop? #t)
+           (displayln "It's null")]
           [stop? (displayln "evaluation stopped")]
           [(pair? source-aux)
-           #;(displayln "It's pair")
+           (displayln "It's pair")
            (set! source-stack (cons (cdr source-aux) source-stack)) ;;add to stack
            (set! source-aux (car source-aux))
            (get-syntax source-aux start end)]
@@ -65,6 +70,9 @@
                  (set! source-aux (syntax-e source-aux))
                (begin
                  (set! next-compare (get-next-compare source-aux source-stack))
+                 #;(displayln start)
+                 #;(displayln compare-aux)
+                 #;(displayln next-compare)
                  (cond [(and (real? next-compare) (< next-compare 0))
                         ;go deeper
                         (set! source-aux (syntax-e source-aux))] 
@@ -80,10 +88,14 @@
                         (set! source-aux (syntax-e source-aux))] 
                        [(<= start compare-aux end) ;; starts in the selected place, and it is not bigger then the next one.
                         ;(set! source-aux (syntax-e source-aux))
-                        #;(display "FOUND IT! ")
+                        (display "FOUND IT! ")
                         #;(displayln source-aux)
                         (set! stop? #t)
                         (set! aux-result source-aux)]
+                       [(> compare-aux lastline)
+                        ;next one
+                        (set! source-aux (car source-stack))
+                        (set! source-stack (cdr source-stack))]
                        [else
                         (read)
                         (displayln "weird else")])))
