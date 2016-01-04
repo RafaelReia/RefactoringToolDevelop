@@ -80,22 +80,24 @@
                         ;next one
                         (set! source-aux (car source-stack))
                         (set! source-stack (cdr source-stack))]
-                       [(>= start next-compare)
+                       [(and (real? next-compare) (>= start next-compare))
                         ;next one
                         (set! source-aux (car source-stack))
                         (set! source-stack (cdr source-stack))]
                        [(> start compare-aux) ;; in the middle, enter
                         (set! source-aux (syntax-e source-aux))] 
+                       [(or (> compare-aux lastline) (> next-compare lastline))
+                        ;next one
+                        (displayln "############ Skip ############")
+                        (set! source-aux (car source-stack))
+                        (set! source-stack (cdr source-stack))]
                        [(<= start compare-aux end) ;; starts in the selected place, and it is not bigger then the next one.
                         ;(set! source-aux (syntax-e source-aux))
                         (display "FOUND IT! ")
                         #;(displayln source-aux)
                         (set! stop? #t)
                         (set! aux-result source-aux)]
-                       [(> compare-aux lastline)
-                        ;next one
-                        (set! source-aux (car source-stack))
-                        (set! source-stack (cdr source-stack))]
+                       
                        [else
                         (read)
                         (displayln "weird else")])))
