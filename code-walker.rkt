@@ -39,10 +39,11 @@
     (define (get-next-compare source-aux source-stack)
       ;else says its bigger than the last part of the selection, could be the end of the program either. this happens when there is no next element.
       (displayln "SOURCE-AUX")
-      (displayln source-aux)
+      (parameterize ((print-syntax-width 9000))
+      (displayln source-aux))
       (displayln "NEXT COMPARE")
       (define aux (+ end 1))
-      #;(parameterize ((print-syntax-width 9000))
+      (parameterize ((print-syntax-width 9000))
         (displayln source-stack)
         (displayln (syntax? source-stack))
         #;(unless (null? source-stack)
@@ -86,7 +87,7 @@
                         (set! source-stack (cdr source-stack))]
                        [(> start compare-aux) ;; in the middle, enter
                         (set! source-aux (syntax-e source-aux))] 
-                       [(or (> compare-aux lastline) (> next-compare lastline))
+                       [(or (> compare-aux lastline) (and (not (= compare-aux lastline)) (> next-compare lastline)))
                         ;next one
                         (displayln "############ Skip ############")
                         (set! source-aux (car source-stack))
