@@ -13,6 +13,8 @@
          (for-template racket/base) ;was a test, did not work
          syntax/to-string
          data/interval-map
+         racket/set
+         racket/dict
          ;racket/string
          "languageRefactorings/racket-refactorings.rkt"
          "languageRefactorings/python-refactorings.rkt"
@@ -33,6 +35,8 @@
                  get-current-tab
                  get-interactions-text
                  get-editor%
+                 ;dc-location-to-editor-location ;;added check this
+                 ;last-position ;;;added check this
                  )
         (inherit register-toolbar-button)
         (define (set-syncheck-running-mode mode)
@@ -63,107 +67,7 @@
              (error 'set-syncheck-running-mode "unknown new mode ~s\n" mode)]))
         
         (define current-syncheck-running-mode #f)
-        
-        (define-struct arrow () #:mutable #:transparent)
-        (define-struct (var-arrow arrow)
-          (start-text start-pos-left start-pos-right
-                      end-text end-pos-left end-pos-right
-                      actual? level require-arrow? name-dup?)
-          ;; level is one of 'lexical, 'top-level, 'import
-          #:transparent)
-        (define-struct (tail-arrow arrow) (from-text from-pos to-text to-pos) #:transparent)
-        
-        ;; arrow-records : (U #f hash[text% => arrow-record])
-        ;; arrow-record = interval-map[(listof arrow-entry)]
-        ;; arrow-entry is one of
-        ;;   - (cons (U #f sym) (menu -> void))
-        ;;   - def-link
-        ;;   - tail-link
-        ;;   - arrow
-        ;;   - string
-        ;;   - colored-region
-        (define/private (get-arrow-record text)
-          (unless (object? text)
-            (error 'get-arrow-record "expected a text as the second argument, got ~e" text))
-          (begin
-            ; (hash-ref! arrow-records text (lambda () (make-interval-map)))
-            ;(display "$$$$$$$$$$$$$$ iteration:  ")
-            ;(dump-arrow-records)
-            (hash-ref! arrow-records text (lambda () (make-interval-map)))
-            )
-          )
-        
-        (define arrow-records #f)
-        
-        (define/private (fetch-arrow-records txt pos)
-          (and arrow-records
-               (let ([im (hash-ref arrow-records txt #f)]) 
-                 (if im
-                     (interval-map-ref im pos '())
-                     '()))))
-        
-        (define/public (dump-arrow-records)
-          (cond
-            [arrow-records
-             (for ([(k v) (in-hash arrow-records)])
-               (printf "\n\n~s:\n" k)
-               (let loop ([it (interval-map-iterate-first v)])
-                 (when it
-                   (printf "~s =>\n" (interval-map-iterate-key v it))
-                   (for ([v (in-list (interval-map-iterate-value v it))])
-                     (printf "  ~s\n" v))
-                   (printf "\n")
-                   (loop (interval-map-iterate-next v it)))))]
-            [else
-             (printf "arrow-records empty\n")]))
-        
-        (define (position->matching-identifiers-hash the-text the-start-pos the-end-pos
-                                                     include-require-arrows?)
-          (define binding-arrows '())
-          (define (add-binding-arrow arr)
-            (void)
-            (when (or include-require-arrows?
-                      (not (var-arrow-require-arrow? arr)))
-              (set! binding-arrows (cons arr binding-arrows))))
-          (for ([the-pos (in-range the-start-pos (+ the-end-pos 1))])
-            (define arrs (fetch-arrow-records the-text the-pos))
-            (when arrs
-              (for ([arrow (in-list arrs)])
-                (when (var-arrow? arrow)
-                  (cond
-                    [(and (equal? (var-arrow-start-text arrow) the-text)
-                          (<= (var-arrow-start-pos-left arrow) 
-                              the-pos 
-                              (var-arrow-start-pos-right arrow)))
-                     ;; a binding occurrence => keep it
-                     (add-binding-arrow arrow)]
-                    [else
-                     ;; a bound occurrence => find binders
-                     (for ([candidate-binder 
-                            (in-list (fetch-arrow-records (var-arrow-start-text arrow)
-                                                          (var-arrow-start-pos-left arrow)))])
-                       (when (var-arrow? candidate-binder)
-                         (when (and (equal? (var-arrow-start-text arrow) 
-                                            (var-arrow-start-text candidate-binder))
-                                    (equal? (var-arrow-start-pos-left arrow)
-                                            (var-arrow-start-pos-left candidate-binder))
-                                    (equal? (var-arrow-start-pos-right arrow)
-                                            (var-arrow-start-pos-right candidate-binder)))
-                           (add-binding-arrow candidate-binder))))]))))))
-        (define (syncheck-add-menu pos text)
-          ;; create objects here!! :D 1190 of gui.rkt
-          (define arrow-record (and (get-definitions-text) pos (hash-ref arrow-records text #f)))
-          (define vec-ents (interval-map-ref arrow-record pos null))
-          (define start-selection (send (get-definitions-text) get-start-position))
-          (define end-selection (send (get-definitions-text) get-end-position))
-          (define arrows (filter arrow? vec-ents))
-          #;(define def-links (filter def-link? vec-ents))
-          (define var-arrows (filter var-arrow? arrows))
-          ;I have access to the binding-identifiers and the make-identifiers-hash
-          (define-values (binding-aux make-identifiers-aux) ;the binding idenfitiers of the selection
-            (position->matching-identifiers-hash (get-definitions-text) start-selection end-selection #t))
-          (void))
-        
+
         (define (refactoring-syntax tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f] 
                                     #:detect-refactorings [detect-refactorings? #f] #:get-refactoring-string [get-refactoring-string #f] #:check-refactorings [check-refactorings? #f])
           (define definitions-text (get-definitions-text))
@@ -503,14 +407,14 @@
                       (displayln last-line)
                       ;;;call the function to highlight all the necessary areas :D
                       (displayln to-highlight-list)
-                      (read)
+                      #;(read)
                       (highlight-selected to-highlight-list))
                     (begin
                       (when (= start last-line)
                         (displayln "last one")
                         (displayln start)
                         (displayln last-line)
-                        (read))
+                        #;(read))
                       (search-refactorings (+ 1 start)))))
               (displayln "before call")
               (search-refactorings start-line))
@@ -762,7 +666,7 @@
         
         (send AutomaticRefactoring enable #t)
         
-        (define (create-refactoring-menu menu bool)
+        (define (create-refactoring-menu menu bool pos text)
           (define refactoring-menu
             (make-object menu%
               "Refactoring Test Plugin"
@@ -777,13 +681,15 @@
           (displayln (send RefactoringOperations get-label))
           (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:get-refactoring-string #t)
           (displayln "@@@@@@")
-          (void))
+          (displayln "end")
+          #;(void))
         (keymap:add-to-right-button-menu/before
          (let ([old (keymap:add-to-right-button-menu/before)])
            (λ (menu editor event)
              (old menu editor event)
              (define-values (pos text) (send (get-definitions-text) get-pos/text event))
-             (create-refactoring-menu menu #f))))))
+             
+             (create-refactoring-menu menu #f pos text))))))
     
     ;;;;Menus definitions (lack a better idea on how to do this)
     (define detect null)
