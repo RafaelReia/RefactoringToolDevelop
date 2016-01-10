@@ -87,8 +87,10 @@
                         (set! source-aux (car source-stack))
                         (set! source-stack (cdr source-stack))]
                        [(> start compare-aux) ;; in the middle, enter
-                        (set! source-aux (syntax-e source-aux))] 
-                       [(and (syntax-source source-aux) (not (string=? (path->string (syntax-source source-aux))
+                        (set! source-aux (syntax-e source-aux))]
+                       [(and (syntax-source source-aux)
+                             (not (and (symbol? source-location) (syntax-source source-aux)))
+                             (not (string=? (path->string (syntax-source source-aux))
                                                                        (path->string source-location))))
                         ;next one
                         (displayln "############ Skip ############")
@@ -106,8 +108,12 @@
                         #;(displayln source-aux)
                         (set! stop? #t)
                         (set! aux-result source-aux)]
-                       
+                       [(and (>= compare-aux start) (<= compare-aux lastline)) ;;needed for Python implementation
+                        (displayln "############ Skip ############")
+                        (set! source-aux (car source-stack))
+                        (set! source-stack (cdr source-stack))]
                        [else
+                        (displayln "This should not happen")
                         (read)
                         (displayln "weird else")])))
            #;(parameterize ((print-syntax-width 9000))

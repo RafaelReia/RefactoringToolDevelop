@@ -66,17 +66,223 @@
             [else
              (error 'set-syncheck-running-mode "unknown new mode ~s\n" mode)]))
         
+        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+        
+        (define definitions-text (get-definitions-text))
+        (define text (get-definitions-text))
+        
+        (define drs-eventspace (current-eventspace))
+        (define the-tab (get-current-tab))
+        (define-values (old-break-thread old-custodian) (send the-tab get-breakables))
+        
+        ;; set by the init-proc
+        (define expanded-expression void)
+        (define expansion-completed void)
+        (define user-custodian #f)
+        
+        (define normal-termination? #f)
+        (define show-error-report/tab
+          (void))
+        (define cleanup
+          (λ () ; =drs=
+            (send the-tab set-breakables old-break-thread old-custodian)
+            (send the-tab enable-evaluation)
+            (set-syncheck-running-mode #f) 
+            #;(close-status-line 'drracket:check-syntax:status)
+            
+            ;; do this with some lag ... not great, but should be okay.
+            #;(let ([err-port (send (send the-tab get-error-report-text) get-err-port)])
+                (thread
+                 (λ ()
+                   (flush-output err-port)
+                   (queue-callback
+                    (λ ()
+                      (unless (= 0 (send (send the-tab get-error-report-text) last-position))
+                        (show-error-report/tab)))))))))
+        (define kill-termination
+          (λ ()
+            (unless normal-termination?
+              (parameterize ([current-eventspace drs-eventspace])
+                (queue-callback
+                 (λ ()
+                   #;(send the-tab syncheck:clear-highlighting)
+                   (cleanup)
+                   (custodian-shutdown-all user-custodian)))))))
+        (define error-display-semaphore (make-semaphore 0))
+        (define uncaught-exception-raised
+          (λ () ;; =user=
+            (set! normal-termination? #t)
+            (parameterize ([current-eventspace drs-eventspace])
+              (queue-callback
+               (λ () ;;  =drs=
+                 (yield error-display-semaphore) ;; let error display go first
+                 #;(send the-tab syncheck:clear-highlighting)
+                 (cleanup)
+                 (custodian-shutdown-all user-custodian))))))
+        #;(define error-port (send (send the-tab get-error-report-text) get-err-port)) ;;cant find get-error-report-text in racket doc
+        #;(define output-port (send (send the-tab get-error-report-text) get-out-port))
+        ;; with-lock/edit-sequence : text (-> void) -> void
+        ;; sets and restores some state of the definitions text
+        ;; so that edits to the definitions text work out.
+        (define (with-lock/edit-sequence definitions-text thnk)
+          (let* ([locked? (send definitions-text is-locked?)])
+            (send definitions-text begin-edit-sequence #t #f)
+            (send definitions-text lock #f)
+            (thnk)
+            (send definitions-text end-edit-sequence)
+            (send definitions-text lock locked?)))
+        (define definitions-text-copy 
+          (new (class text:basic%
+                 ;; overriding get-port-name like this ensures
+                 ;; that the resulting syntax objects are connected
+                 ;; to the actual definitions-text, not this copy
+                 (define/override (get-port-name)
+                   (send definitions-text get-port-name))
+                 (super-new))))
+        (define init-proc
+          (λ () ; =user=
+            (send the-tab set-breakables (current-thread) (current-custodian))
+            #;(set-directory definitions-text)  ;Is this important?
+            (current-load-relative-directory #f)
+            #;(current-error-port error-port)
+            #;(current-output-port output-port)
+            #;(error-display-handler 
+               (λ (msg exn) ;; =user=
+                 (parameterize ([current-eventspace drs-eventspace])
+                   #;(queue-callback
+                      (λ () ;; =drs=
+                        
+                        ;; this has to come first or else the positioning
+                        ;; computations in the highlight-errors/exn method
+                        ;; will be wrong by the size of the error report box
+                        (show-error-report/tab)
+                        
+                        ;; a call like this one also happens in 
+                        ;; drracket:debug:error-display-handler/stacktrace
+                        ;; but that call won't happen here, because
+                        ;; the rep is not in the current-rep parameter
+                        (send interactions-text highlight-errors/exn exn))))
+                 
+                 (drracket:debug:error-display-handler/stacktrace 
+                  msg 
+                  exn 
+                  '()
+                  #:definitions-text definitions-text)
+                 
+                 (semaphore-post error-display-semaphore)))
+            
+            (error-print-source-location #f) ; need to build code to render error first
+            (uncaught-exception-handler
+             (let ([oh (uncaught-exception-handler)])
+               (λ (exn)
+                 (uncaught-exception-raised)
+                 (oh exn))))
+            #;(update-status-line 'drracket:check-syntax:status status-expanding-expression)
+            (set!-values (expanded-expression expansion-completed) 
+                         (make-traversal (current-namespace)
+                                         (current-directory)
+                                         #f)) ;; set by set-directory above #:print-extra-info? [print-extra-info? #f]
+            (set! user-custodian (current-custodian))))
+        (define settings (send definitions-text get-next-settings))
+        (define module-language?
+          (is-a? (drracket:language-configuration:language-settings-language settings)
+                 drracket:module-language:module-language<%>))
+        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
         (define current-syncheck-running-mode #f)
-
+        
+        (define (printPython tab interactions expanded? #:print-expanded-form? [expanded-form? #f])
+          (define start-selection (send text get-start-position))
+          (define end-selection (send text get-end-position))
+          (define last-line (send text last-line))
+          (displayln last-line)
+          ;;find-line uses location, not position. must convert before!
+          (define start-box (box 1))
+          (define end-box (box 1))
+          (define last-box (box 1))
+          (send text position-location start-selection #f start-box #t #f #f);Check this!
+          (send text position-location end-selection #f end-box #t #f #f);Check this!
+          (send text position-location last-line #f last-box #t #f #f) ;Trying
+          (displayln last-box)
+          (displayln (send text position-line last-line))
+          (define start-line (send text find-line (unbox start-box)))
+          (define end-line (send text find-line (unbox end-box)))
+          (define last-line-pos (send text find-line (unbox last-box)))
+          (if expanded-form?
+              (with-lock/edit-sequence
+               text
+               (λ ()
+                 (drracket:eval:expand-program
+                  #:gui-modules? #f
+                  (drracket:language:make-text/pos text
+                                                   0
+                                                   (send text last-position)) ;;Input
+                  settings
+                  #f;(not module-language?)
+                  init-proc
+                  kill-termination
+                  (λ (sexp loop) ; =user=
+                    (cond
+                      [(eof-object? sexp)
+                       (set! normal-termination? #t)
+                       (parameterize ([current-eventspace drs-eventspace])
+                         (queue-callback
+                          (λ () ; =drs=
+                            (with-lock/edit-sequence
+                             definitions-text
+                             (λ ()
+                               (parameterize ([current-annotations definitions-text])
+                                 (begin
+                                   (expansion-completed)))))
+                            (cleanup)
+                            (custodian-shutdown-all user-custodian))))]
+                      [else
+                       (unless module-language?
+                         (eval-compile-time-part-of-top-level sexp))
+                       (parameterize ([current-eventspace drs-eventspace])
+                         (queue-callback
+                          (λ () ; =drs=
+                            (with-lock/edit-sequence
+                             definitions-text
+                             (λ ()
+                               #;(update-status-line 
+                                  'drracket:check-syntax:status status-coloring-program)
+                               (parameterize ([current-annotations definitions-text])
+                                 (begin
+                                   #;(print-languages-syntax sexp #t (get-definitions-text) start-selection end-selection start-line end-line last-line (get-editor%))
+                                   (parameterize ((print-syntax-width 9000))
+                                     (displayln sexp))
+                                   (expanded-expression sexp)))
+                               #;(close-status-line 'drracket:check-syntax:status))))))
+                       (loop)])))))
+              ((λ ()
+                 ((drracket:eval:traverse-program/multiple
+                   #:gui-modules? #f
+                   settings
+                   init-proc
+                   kill-termination)
+                  (drracket:language:make-text/pos text
+                                                   0
+                                                   (send text last-position))
+                  (λ (sexp loop) ;this is the "iter"
+                    (cond
+                      [(eof-object? sexp)
+                       (custodian-shutdown-all user-custodian)]
+                      [else
+                       (displayln sexp)
+                       (parameterize ((print-syntax-width 9000))
+                         (displayln sexp))
+                       (displayln not-expanded-program)
+                       (print-languages-syntax sexp #f (get-definitions-text) start-selection end-selection
+                                           start-line end-line last-line)
+                       
+                       (loop)])) 
+                  #t)))))
+        
+        
         (define (refactoring-syntax tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f] 
                                     #:detect-refactorings [detect-refactorings? #f] #:get-refactoring-string [get-refactoring-string #f] #:check-refactorings [check-refactorings? #f])
-          (define definitions-text (get-definitions-text))
-          (define text (get-definitions-text))
-          (define interactions-text interactions)
-          (define drs-eventspace (current-eventspace))
-          (define the-tab (get-current-tab))
-          (define-values (old-break-thread old-custodian) (send the-tab get-breakables))
           
+          (define interactions-text interactions)
           ;;;;;;;;;;;;;;;;;; Editor information
           (define start-selection (send text get-start-position))
           (define end-selection (send text get-end-position))
@@ -97,128 +303,6 @@
           (displayln last-line-pos)
           (displayln end-line)
           ;;;;;;;;;;;;;;;;;;
-          
-          ;; set by the init-proc
-          (define expanded-expression void)
-          (define expansion-completed void)
-          (define user-custodian #f)
-          
-          (define normal-termination? #f)
-          
-          (define show-error-report/tab
-            (void)
-            #;(λ () ; =drs=
-                #;(send the-tab turn-on-error-report)
-                #;(send (send the-tab get-error-report-text) scroll-to-position 0)
-                #;(when (eq? (get-current-tab) the-tab)
-                    (show-error-report))))
-          (define cleanup
-            (λ () ; =drs=
-              (send the-tab set-breakables old-break-thread old-custodian)
-              (send the-tab enable-evaluation)
-              (set-syncheck-running-mode #f) 
-              #;(close-status-line 'drracket:check-syntax:status)
-              
-              ;; do this with some lag ... not great, but should be okay.
-              #;(let ([err-port (send (send the-tab get-error-report-text) get-err-port)])
-                  (thread
-                   (λ ()
-                     (flush-output err-port)
-                     (queue-callback
-                      (λ ()
-                        (unless (= 0 (send (send the-tab get-error-report-text) last-position))
-                          (show-error-report/tab)))))))))
-          (define kill-termination
-            (λ ()
-              (unless normal-termination?
-                (parameterize ([current-eventspace drs-eventspace])
-                  (queue-callback
-                   (λ ()
-                     #;(send the-tab syncheck:clear-highlighting)
-                     (cleanup)
-                     (custodian-shutdown-all user-custodian)))))))
-          (define error-display-semaphore (make-semaphore 0))
-          (define uncaught-exception-raised
-            (λ () ;; =user=
-              (set! normal-termination? #t)
-              (parameterize ([current-eventspace drs-eventspace])
-                (queue-callback
-                 (λ () ;;  =drs=
-                   (yield error-display-semaphore) ;; let error display go first
-                   #;(send the-tab syncheck:clear-highlighting)
-                   (cleanup)
-                   (custodian-shutdown-all user-custodian))))))
-          #;(define error-port (send (send the-tab get-error-report-text) get-err-port)) ;;cant find get-error-report-text in racket doc
-          #;(define output-port (send (send the-tab get-error-report-text) get-out-port))
-          ;; with-lock/edit-sequence : text (-> void) -> void
-          ;; sets and restores some state of the definitions text
-          ;; so that edits to the definitions text work out.
-          (define (with-lock/edit-sequence definitions-text thnk)
-            (let* ([locked? (send definitions-text is-locked?)])
-              (send definitions-text begin-edit-sequence #t #f)
-              (send definitions-text lock #f)
-              (thnk)
-              (send definitions-text end-edit-sequence)
-              (send definitions-text lock locked?)))
-          (define definitions-text-copy 
-            (new (class text:basic%
-                   ;; overriding get-port-name like this ensures
-                   ;; that the resulting syntax objects are connected
-                   ;; to the actual definitions-text, not this copy
-                   (define/override (get-port-name)
-                     (send definitions-text get-port-name))
-                   (super-new))))
-          (define init-proc
-            (λ () ; =user=
-              (send the-tab set-breakables (current-thread) (current-custodian))
-              #;(set-directory definitions-text)  ;Is this important?
-              (current-load-relative-directory #f)
-              #;(current-error-port error-port)
-              #;(current-output-port output-port)
-              #;(error-display-handler 
-                 (λ (msg exn) ;; =user=
-                   (parameterize ([current-eventspace drs-eventspace])
-                     #;(queue-callback
-                        (λ () ;; =drs=
-                          
-                          ;; this has to come first or else the positioning
-                          ;; computations in the highlight-errors/exn method
-                          ;; will be wrong by the size of the error report box
-                          (show-error-report/tab)
-                          
-                          ;; a call like this one also happens in 
-                          ;; drracket:debug:error-display-handler/stacktrace
-                          ;; but that call won't happen here, because
-                          ;; the rep is not in the current-rep parameter
-                          (send interactions-text highlight-errors/exn exn))))
-                   
-                   (drracket:debug:error-display-handler/stacktrace 
-                    msg 
-                    exn 
-                    '()
-                    #:definitions-text definitions-text)
-                   
-                   (semaphore-post error-display-semaphore)))
-              
-              (error-print-source-location #f) ; need to build code to render error first
-              (uncaught-exception-handler
-               (let ([oh (uncaught-exception-handler)])
-                 (λ (exn)
-                   (uncaught-exception-raised)
-                   (oh exn))))
-              #;(update-status-line 'drracket:check-syntax:status status-expanding-expression)
-              (set!-values (expanded-expression expansion-completed) 
-                           (make-traversal (current-namespace)
-                                           (current-directory)
-                                           print-extra-info?)) ;; set by set-directory above
-              (set! user-custodian (current-custodian))))
-          (define settings (send definitions-text get-next-settings))
-          (displayln "expand")
-          (define module-language?
-            (is-a? (drracket:language-configuration:language-settings-language settings)
-                   drracket:module-language:module-language<%>))
-          
-          
           (define (check-similar start-line)
             (displayln "check-similar")
             (define (search-similiar sexp randombool text start-selection end-selection 
@@ -597,13 +681,15 @@
                          (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings? get-refactoring-string)
                          
                          (loop)])) 
-                    #t)))))
+                    #t))))
           (send text begin-edit-sequence)
           (send text insert " " (send text last-position))
           (send text delete (- (send text last-position) 1) (send text last-position))
           (send text end-edit-sequence)
+            )
+
           (when get-refactoring-string
-            (let ((result "testeBro" )
+            (let ((result "empty" )
                   (tID null))
               ((λ ()
                  ((drracket:eval:traverse-program/multiple
@@ -677,6 +763,17 @@
                   refactoring-menu
                   (λ (item evt)
                     (refactoring-syntax (get-current-tab) (get-interactions-text) #f))))
+          (set! printPythonmenu 
+                (make-object menu-item%
+                  "Print non expanded form"
+                  refactoring-menu
+                  (λ (item evt)
+                    (printPython (get-current-tab) (get-interactions-text) #f))))
+          (make-object menu-item%
+                  "Print expanded form"
+                  refactoring-menu
+                  (λ (item evt)
+                    (printPython (get-current-tab) (get-interactions-text) #t #:print-expanded-form? #t)))
           (displayln "$$$$$$$$$$$$$$$$$$$$$$$$$$ LABEL")
           (displayln (send RefactoringOperations get-label))
           (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:get-refactoring-string #t)
@@ -696,6 +793,15 @@
     (define clear null)
     (define AutomaticRefactoring null)
     (define RefactoringOperations null)
+    (define printPythonmenu null)
+    
+    (define (print-languages-syntax program expanded? text start-selection end-selection start-line end-line last-line)
+      (displayln "print-languages")
+      (parameterize ((print-syntax-width 9000))
+      (if expanded?
+          (displayln (code-walker program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
+      (displayln (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line))))))
+    
     
     (define search-refactoring #t)
     (define (syntax-refactoring program expanded? text start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings?
