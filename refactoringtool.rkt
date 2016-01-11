@@ -414,12 +414,17 @@
                     (loop val (current-inexact-milliseconds) 0)))
                 #f)]
               [else
+               (displayln val)
                (process-trace-element known-dead-place-channels defs-text (car val))
                (loop (cdr val) start-time (+ i 1))])))
         (define/private (process-trace-element known-dead-place-channels defs-text x)
           (displayln "in process-trace-element")
           ;; using 'defs-text' all the time is wrong in the case of embedded editors,
           ;; but they already don't work and we've arranged for them to not appear here ....
+          (parameterize ((print-syntax-width 9000))
+          (displayln defs-text)
+          (pretty-print defs-text)
+            )
           (match x
             [`#(syncheck:add-arrow/name-dup/pxpy
                 ,start-pos-left ,start-pos-right ,start-px ,start-py
@@ -1333,7 +1338,7 @@
           ;;                            -- pick up some new elements to add to the current replay
           ;;             #f))           -- doesn't actually get set on a tab, but this means to
           ;;                               just stop running the replay
-          
+          (displayln "else in cond")
           
           (when (get-next-trace-refresh?)
             (define old-replay-state (get-replay-state))
@@ -1352,9 +1357,13 @@
           (define drr-frame (send (send defs-text get-tab) get-frame))
           (cond
             [(string? val) ;; an internal error happened
+             (displayln "in val")
+             (displayln val)
              #;(send tab remove-bkg-running-color 'syncheck)
              #;(send tab show-online-internal-error val)]
             [else
+             (displayln "else in cond in else")
+             (displayln val)
              (define current-replay-state (get-replay-state))
              (cond
                [(not current-replay-state)
@@ -1379,4 +1388,5 @@
     (define (phase2) (void))
     (drracket:get/extend:extend-unit-frame refactoring-tool-mixin)))
 (define-runtime-path online-comp.rkt "online-comp.rkt")
-(define cs-syncheck-running (string-constant cs-syncheck-running))
+(define cs-syncheck-running "Check Syntax Running") ;;before 6.3
+#;(define cs-syncheck-running (string-constant cs-syncheck-running)) ;;;for 6.3
