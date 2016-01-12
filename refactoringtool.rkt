@@ -289,7 +289,7 @@
         
             (define/public (syncheck:add-background-color text start fin raw-color)
               (displayln "add-backgroud-color not implemented")
-              (read)
+              #;(read)
               #;(when arrow-records
                 (when (is-a? text text:basic<%>)
                   ;; we adjust the colors over here based on the white-on-black
@@ -368,7 +368,7 @@
             ;; syncheck:add-jump-to-definition : text start end id filename -> void
             (define/public (syncheck:add-jump-to-definition text start end id filename submods)
               (displayln "add-jump-to-definition not implemented")
-              (read)
+              #;(read)
               #;(when arrow-records
                 (add-to-range/key text start end (make-def-link id filename submods) #f #f)))
             
@@ -425,41 +425,42 @@
           (displayln defs-text)
           (pretty-print defs-text)
             )
+
           (match x
             [`#(syncheck:add-arrow/name-dup/pxpy
                 ,start-pos-left ,start-pos-right ,start-px ,start-py
                 ,end-pos-left ,end-pos-right ,end-px ,end-py
                 ,actual? ,level ,require-arrow? ,name-dup-pc ,name-dup-id)
              (define name-dup? (build-name-dup? name-dup-pc name-dup-id  known-dead-place-channels))
-             (send defs-text syncheck:add-arrow/name-dup/pxpy
+             (syncheck:add-arrow/name-dup/pxpy
                    defs-text start-pos-left start-pos-right start-px start-py
                    defs-text end-pos-left end-pos-right end-px end-py
                    actual? level require-arrow? name-dup?)]
             [`#(syncheck:add-tail-arrow ,from-pos ,to-pos)
-             (send defs-text syncheck:add-tail-arrow defs-text from-pos defs-text to-pos)]
+             (syncheck:add-tail-arrow defs-text from-pos defs-text to-pos)]
             [`#(syncheck:add-mouse-over-status ,pos-left ,pos-right ,str)
-             (send defs-text syncheck:add-mouse-over-status defs-text pos-left pos-right str)]
+             (syncheck:add-mouse-over-status defs-text pos-left pos-right str)]
             [`#(syncheck:add-background-color ,color ,start ,fin)
-             (send defs-text syncheck:add-background-color defs-text color start fin)]
+             (syncheck:add-background-color defs-text color start fin)]
             [`#(syncheck:add-jump-to-definition ,start ,end ,id ,filename ,submods)
-             (send defs-text syncheck:add-jump-to-definition defs-text start end id filename submods)]
+             (syncheck:add-jump-to-definition defs-text start end id filename submods)]
             [`#(syncheck:add-require-open-menu ,start-pos ,end-pos ,file)
              (displayln "require-open-menu")
-             #;(send defs-text syncheck:add-require-open-menu defs-text start-pos end-pos file)] ;;got an error, might be useful...
+             #;(syncheck:add-require-open-menu defs-text start-pos end-pos file)] ;;got an error, might be useful...
             [`#(syncheck:add-docs-menu ,start-pos ,end-pos ,key ,the-label ,path ,definition-tag ,tag)
              (displayln "add-docs-menu")
-             #;(send defs-text syncheck:add-docs-menu defs-text start-pos end-pos
+             #;(syncheck:add-docs-menu defs-text start-pos end-pos
                    key the-label path definition-tag tag)]
             [`#(syncheck:add-definition-target ,start-pos ,end-pos ,id ,mods)
              (displayln "add-definition-target")
-             #;(send defs-text syncheck:add-definition-target defs-text start-pos end-pos id mods)]
+             #;(syncheck:add-definition-target defs-text start-pos end-pos id mods)]
             [`#(syncheck:add-id-set ,to-be-renamed/poss ,name-dup-pc ,name-dup-id)
                (void)
              #;(define to-be-renamed/poss/fixed
                (for/list ([lst (in-list to-be-renamed/poss)])
                  (list defs-text (list-ref lst 0) (list-ref lst 1))))
              #;(define name-dup? (build-name-dup? name-dup-pc name-dup-id known-dead-place-channels))
-             #;(send defs-text syncheck:add-id-set to-be-renamed/poss/fixed name-dup?)]))
+             #;(syncheck:add-id-set to-be-renamed/poss/fixed name-dup?)]))
         
         (define/private (build-name-dup? name-dup-pc name-dup-id known-dead-place-channels)
           (define (name-dup? name) 

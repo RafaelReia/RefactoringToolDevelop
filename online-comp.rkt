@@ -6,7 +6,9 @@
          (for-syntax racket/base)
          drracket/private/syncheck/traversals
          drracket/private/syncheck/syncheck-intf
-         drracket/private/syncheck/xref)
+         drracket/private/syncheck/xref
+         "intf.rkt"
+        "local-member-names.rkt")
 
 (provide go monitor)
 
@@ -49,8 +51,15 @@
   (log-message online-check-syntax-logger 'info  "" c)
   ;; wait for everything to actually get sent back to the main place
   (channel-get c))
-
+(define teste-port (open-output-string))
 (define (build-trace stxes the-source orig-cust path)
+  (displayln "path refactoring tool")
+  (displayln (get-init-dir path))
+  (define-values (remote-chan local-chan) (place-channel))
+  (displayln "debug")
+  (displayln remote-chan)
+  (displayln local-chan)
+  
   (parameterize ([current-max-to-send-at-once 50])
     (define obj (new build-place-chan-trace%
                      [src the-source]
@@ -71,7 +80,7 @@
     (define-values (remote-chan local-chan) (place-channel))
     (define table (make-hash))
     (create-rename-answerer-thread orig-cust local-chan table)
-    (define (syncheck:add-arrow/name-dup/pxpy _start-text
+    (define/override (syncheck:add-arrow/name-dup/pxpy _start-text
                                                        start-pos-left start-pos-right
                                                        start-px start-py
                                                        _end-text
@@ -79,18 +88,21 @@
                                                        end-px end-py
                                                        actual? level require-arrow? name-dup?)
       (define id (hash-count table))
+      (write id teste-port)
+      (write remote-chan teste-port)
       (hash-set! table id name-dup?)
+      
       (add-to-trace (vector 'syncheck:add-arrow/name-dup/pxpy
                             start-pos-left start-pos-right start-px start-py
                             end-pos-left end-pos-right end-px end-py
                             actual? level require-arrow? remote-chan id)))
     
-    (define (syncheck:add-id-set to-be-renamed/poss dup-name?)
+    (define/override (syncheck:add-id-set to-be-renamed/poss dup-name?)
       (define id (hash-count table))
       (hash-set! table id dup-name?)
       (add-to-trace (vector 'syncheck:add-id-set (map cdr to-be-renamed/poss) remote-chan id)))
     (super-new)))
-    
+
 
 (define (monitor send-back path the-source orig-cust)
   (define lr (make-log-receiver (current-logger)
@@ -110,7 +122,11 @@
                                 (parameterize ([current-error-port sp])
                                   ((error-display-handler) (exn-message exn) exn))
                                 (send-back (get-output-string sp)))])
+               (displayln "in loop monitor")
                (define trace (build-trace obj the-source orig-cust path))
+               (displayln trace)
+               #;(displayln "before output string")
+               #;(displayln (get-output-string teste-port))
                (send-back trace))]
             [(channel? obj)
              ;; signal back to the main place that we've gotten everything
