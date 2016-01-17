@@ -21,3 +21,7 @@ def ackermann(m,n):
     else: return ackermann(m-1, ackermann(m,n-1))
 
 print ackermann(1,1)
+
+def testExtract(a, b, c):
+    a + b + c
+

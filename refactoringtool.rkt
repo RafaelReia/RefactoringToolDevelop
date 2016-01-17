@@ -18,15 +18,20 @@
          racket/runtime-path
          racket/match
          racket/place
+         racket/list
+         racket/string
          string-constants
+         framework
+         (prefix-in drracket:arrow: drracket/arrow)
+         (prefix-in fw: framework/framework)
          ;racket/string
          "online-comp.rkt"
          "languageRefactorings/racket-refactorings.rkt"
          "languageRefactorings/python-refactorings.rkt"
          "code-walker.rkt") 
 (provide tool@)
-(define not-expanded-program null)
 (define expanded-program null)
+(define non-expanded-program null)
 (define tool@
   (unit
     (import drracket:tool^)
@@ -43,7 +48,7 @@
                  ;dc-location-to-editor-location ;;added check this
                  ;last-position ;;;added check this
                  )
-
+        
         (define (dc-location-to-editor-location arg1 arg2)
           (send (get-editor%) dc-location-to-editor-location arg1 arg2))
         (inherit register-toolbar-button)
@@ -74,320 +79,320 @@
             [else
              (error 'set-syncheck-running-mode "unknown new mode ~s\n" mode)]))
         ;;;;;;;;;;;;;;;;;;;;;;;;;; Arrow Structure  ;;;;;
- (define-struct arrow () #:mutable #:transparent)
-    (define-struct (var-arrow arrow)
-      (start-text start-pos-left start-pos-right start-px start-py
-                  end-text end-pos-left end-pos-right end-px end-py
-                  actual? level require-arrow? name-dup?)
-      ;; level is one of 'lexical, 'top-level, 'import
-      #:transparent)
-    (define-struct (tail-arrow arrow) (from-text from-pos to-text to-pos) #:transparent)
-
-                    ;; arrow-records : (U #f hash[text% => arrow-record])
-            ;; arrow-record = interval-map[(listof arrow-entry)]
-            ;; arrow-entry is one of
-            ;;   - (cons (U #f sym) (menu -> void))
-            ;;   - def-link
-            ;;   - tail-link
-            ;;   - arrow
-            ;;   - string
-            ;;   - colored-region
-            (define/private (get-arrow-record text)
-              (unless (object? text)
-                (error 'get-arrow-record "expected a text as the second argument, got ~e" text))
-              (hash-ref! arrow-records text (lambda () (make-interval-map))))
-
-            (define arrow-records #f)
-            
-            (define/private (fetch-arrow-records txt pos)
-              (and arrow-records
-                   (let ([im (hash-ref arrow-records txt #f)]) 
-                     (if im
-                         (interval-map-ref im pos '())
-                         '()))))
-            
-            (define/public (dump-arrow-records)
-              (displayln "inside dump-arrow-records")
-              (cond
-                [arrow-records
-                 (for ([(k v) (in-hash arrow-records)])
-                   (printf "\n\n~s:\n" k)
-                   (let loop ([it (interval-map-iterate-first v)])
-                     (when it
-                       (printf "~s =>\n" (interval-map-iterate-key v it))
-                       (for ([v (in-list (interval-map-iterate-value v it))])
-                         (printf "  ~s\n" v))
-                       (printf "\n")
-                       (loop (interval-map-iterate-next v it)))))]
-                [else
-                 (printf "arrow-records empty\n")]))
-            
-            ;; cleanup-texts : (or/c #f (listof text))
-            (define cleanup-texts #f)
-            
-            ;; definition-targets : hash-table[(list symbol[id-name] (listof symbol[submodname])) 
-            ;;                                 -o> (list text number number)]
-            (define definition-targets (make-hash))
-            
-            
-            ;; bindings-table : hash-table[(list text number number)
-            ;;                             -o> (setof (list text number number))]
-            ;; this is a private field
-            (define bindings-table (make-hash))
-            
-            ;; add-to-bindings-table : text number number text number number -> boolean
-            ;; results indicates if the binding was added to the table. It is added, unless
-            ;;  1) it is already there, or
-            ;;  2) it is a link to itself
-            (define/private (add-to-bindings-table start-text start-left start-right
-                                                   end-text end-left end-right)
-              (cond
-                [(and (object=? start-text end-text)
-                      (= start-left end-left)
-                      (= start-right end-right))
-                 #f]
-                [else
-                 (define key (list start-text start-left start-right))
-                 (define priors (hash-ref bindings-table key (λ () (set))))
-                 (define new (list end-text end-left end-right))
+        (define-struct arrow () #:mutable #:transparent)
+        (define-struct (var-arrow arrow)
+          (start-text start-pos-left start-pos-right start-px start-py
+                      end-text end-pos-left end-pos-right end-px end-py
+                      actual? level require-arrow? name-dup?)
+          ;; level is one of 'lexical, 'top-level, 'import
+          #:transparent)
+        (define-struct (tail-arrow arrow) (from-text from-pos to-text to-pos) #:transparent)
+        
+        ;; arrow-records : (U #f hash[text% => arrow-record])
+        ;; arrow-record = interval-map[(listof arrow-entry)]
+        ;; arrow-entry is one of
+        ;;   - (cons (U #f sym) (menu -> void))
+        ;;   - def-link
+        ;;   - tail-link
+        ;;   - arrow
+        ;;   - string
+        ;;   - colored-region
+        (define/private (get-arrow-record text)
+          (unless (object? text)
+            (error 'get-arrow-record "expected a text as the second argument, got ~e" text))
+          (hash-ref! arrow-records text (lambda () (make-interval-map))))
+        
+        (define arrow-records #f)
+        
+        (define/private (fetch-arrow-records txt pos)
+          (and arrow-records
+               (let ([im (hash-ref arrow-records txt #f)]) 
+                 (if im
+                     (interval-map-ref im pos '())
+                     '()))))
+        
+        (define/public (dump-arrow-records)
+          (displayln "inside dump-arrow-records")
+          (cond
+            [arrow-records
+             (for ([(k v) (in-hash arrow-records)])
+               (printf "\n\n~s:\n" k)
+               (let loop ([it (interval-map-iterate-first v)])
+                 (when it
+                   (printf "~s =>\n" (interval-map-iterate-key v it))
+                   (for ([v (in-list (interval-map-iterate-value v it))])
+                     (printf "  ~s\n" v))
+                   (printf "\n")
+                   (loop (interval-map-iterate-next v it)))))]
+            [else
+             (printf "arrow-records empty\n")]))
+        
+        ;; cleanup-texts : (or/c #f (listof text))
+        (define cleanup-texts #f)
+        
+        ;; definition-targets : hash-table[(list symbol[id-name] (listof symbol[submodname])) 
+        ;;                                 -o> (list text number number)]
+        (define definition-targets (make-hash))
+        
+        
+        ;; bindings-table : hash-table[(list text number number)
+        ;;                             -o> (setof (list text number number))]
+        ;; this is a private field
+        (define bindings-table (make-hash))
+        
+        ;; add-to-bindings-table : text number number text number number -> boolean
+        ;; results indicates if the binding was added to the table. It is added, unless
+        ;;  1) it is already there, or
+        ;;  2) it is a link to itself
+        (define/private (add-to-bindings-table start-text start-left start-right
+                                               end-text end-left end-right)
+          (cond
+            [(and (object=? start-text end-text)
+                  (= start-left end-left)
+                  (= start-right end-right))
+             #f]
+            [else
+             (define key (list start-text start-left start-right))
+             (define priors (hash-ref bindings-table key (λ () (set))))
+             (define new (list end-text end-left end-right))
+             (cond
+               [(set-member? priors new)
+                #f]
+               [else
+                (hash-set! bindings-table key (set-add priors new))
+                #t])]))
+        ;; compare-bindings : (list text number number) (list text number number) -> boolean
+        ;; compares two bindings in the sets inside the bindings table, returning
+        ;; #t if l1 appears earlier in the file than l2 does.
+        (define/private (syncheck:compare-bindings l1 l2)
+          
+          ;; find-dc-location : text number -> (values number number)
+          (define (find-dc-location text pos)
+            (send text position-location pos xlb xrb)
+            (send text editor-location-to-dc-location (unbox xlb) (unbox xrb)))
+          
+          (let ([start-text (list-ref l1 0)]
+                [start-left (list-ref l1 1)]
+                [end-text (list-ref l2 0)]
+                [end-left (list-ref l2 1)])
+            (cond
+              [(object=? start-text end-text)
+               (< start-left end-left)]
+              [else
+               (let-values ([(sx sy) (find-dc-location start-text start-left)]
+                            [(ex ey) (find-dc-location end-text end-left)])
                  (cond
-                   [(set-member? priors new)
-                    #f]
-                   [else
-                    (hash-set! bindings-table key (set-add priors new))
-                    #t])]))
-            ;; compare-bindings : (list text number number) (list text number number) -> boolean
-            ;; compares two bindings in the sets inside the bindings table, returning
-            ;; #t if l1 appears earlier in the file than l2 does.
-            (define/private (syncheck:compare-bindings l1 l2)
-              
-              ;; find-dc-location : text number -> (values number number)
-              (define (find-dc-location text pos)
-                (send text position-location pos xlb xrb)
-                (send text editor-location-to-dc-location (unbox xlb) (unbox xrb)))
-              
-              (let ([start-text (list-ref l1 0)]
-                    [start-left (list-ref l1 1)]
-                    [end-text (list-ref l2 0)]
-                    [end-left (list-ref l2 1)])
-                (cond
-                  [(object=? start-text end-text)
-                   (< start-left end-left)]
-                  [else
-                   (let-values ([(sx sy) (find-dc-location start-text start-left)]
-                                [(ex ey) (find-dc-location end-text end-left)])
-                     (cond
-                       [(= sy ey) (< sx ex)]
-                       [else (< sy ey)]))])))
-
-            (define tacked-hash-table (make-hasheq))
-            
-            ;; find-char-box : text number number -> (values number number number number)
-            ;; returns the bounding box (left, top, right, bottom) for the text range.
-            ;; only works right if the text is on a single line.
-            (define/private (find-char-box text left-pos right-pos)
-              (send text position-location left-pos xlb ylb #t)
-              (send text position-location right-pos xrb yrb #f)
-              (define-values (xl-off yl-off) 
-                (send text editor-location-to-dc-location (unbox xlb) (unbox ylb)))
-              (define-values (xl yl)
-                (dc-location-to-editor-location xl-off yl-off))
-              (define-values (xr-off yr-off)
-                (send text editor-location-to-dc-location (unbox xrb) (unbox yrb)))
-              (define-values (xr yr) (dc-location-to-editor-location xr-off yr-off))
-              (values 
-               xl
-               yl
-               xr 
-               yr))
-            
-            (define/private (get-arrow-poss arrow)
+                   [(= sy ey) (< sx ex)]
+                   [else (< sy ey)]))])))
+        
+        (define tacked-hash-table (make-hasheq))
+        
+        ;; find-char-box : text number number -> (values number number number number)
+        ;; returns the bounding box (left, top, right, bottom) for the text range.
+        ;; only works right if the text is on a single line.
+        (define/private (find-char-box text left-pos right-pos)
+          (send text position-location left-pos xlb ylb #t)
+          (send text position-location right-pos xrb yrb #f)
+          (define-values (xl-off yl-off) 
+            (send text editor-location-to-dc-location (unbox xlb) (unbox ylb)))
+          (define-values (xl yl)
+            (dc-location-to-editor-location xl-off yl-off))
+          (define-values (xr-off yr-off)
+            (send text editor-location-to-dc-location (unbox xrb) (unbox yrb)))
+          (define-values (xr yr) (dc-location-to-editor-location xr-off yr-off))
+          (values 
+           xl
+           yl
+           xr 
+           yr))
+        
+        (define/private (get-arrow-poss arrow)
+          (cond
+            [(var-arrow? arrow) (get-var-arrow-poss arrow)]
+            [(tail-arrow? arrow) (get-tail-arrow-poss arrow)]))
+        
+        (define/private (get-var-arrow-poss arrow)
+          (let-values ([(start-x start-y) (find-poss 
+                                           (var-arrow-start-text arrow)
+                                           (var-arrow-start-pos-left arrow)
+                                           (var-arrow-start-pos-right arrow)
+                                           (var-arrow-start-px arrow)
+                                           (var-arrow-start-py arrow))]
+                       [(end-x end-y) (find-poss 
+                                       (var-arrow-end-text arrow)
+                                       (var-arrow-end-pos-left arrow)
+                                       (var-arrow-end-pos-right arrow)
+                                       (var-arrow-end-px arrow)
+                                       (var-arrow-end-py arrow))])
+            (values start-x start-y end-x end-y)))
+        
+        (define/private (get-tail-arrow-poss arrow)
+          ;; If the item is an embedded editor snip, redirect
+          ;; the arrow to point at the left edge rather than the
+          ;; midpoint.
+          (define (find-poss/embedded text pos)
+            (let* ([snip (send text find-snip pos 'after)])
               (cond
-                [(var-arrow? arrow) (get-var-arrow-poss arrow)]
-                [(tail-arrow? arrow) (get-tail-arrow-poss arrow)]))
-            
-            (define/private (get-var-arrow-poss arrow)
-              (let-values ([(start-x start-y) (find-poss 
-                                               (var-arrow-start-text arrow)
-                                               (var-arrow-start-pos-left arrow)
-                                               (var-arrow-start-pos-right arrow)
-                                               (var-arrow-start-px arrow)
-                                               (var-arrow-start-py arrow))]
-                           [(end-x end-y) (find-poss 
-                                           (var-arrow-end-text arrow)
-                                           (var-arrow-end-pos-left arrow)
-                                           (var-arrow-end-pos-right arrow)
-                                           (var-arrow-end-px arrow)
-                                           (var-arrow-end-py arrow))])
-                (values start-x start-y end-x end-y)))
-            
-            (define/private (get-tail-arrow-poss arrow)
-              ;; If the item is an embedded editor snip, redirect
-              ;; the arrow to point at the left edge rather than the
-              ;; midpoint.
-              (define (find-poss/embedded text pos)
-                (let* ([snip (send text find-snip pos 'after)])
-                  (cond
-                    [(and snip 
-                          (is-a? snip editor-snip%)
-                          (= pos (send text get-snip-position snip)))
-                     (find-poss text pos pos .5 .5)]
-                    [else
-                     (find-poss text pos (+ pos 1) .5 .5)])))
-              (let-values ([(start-x start-y) (find-poss/embedded 
-                                               (tail-arrow-from-text arrow)
-                                               (tail-arrow-from-pos arrow))]
-                           [(end-x end-y) (find-poss/embedded
-                                           (tail-arrow-to-text arrow)
-                                           (tail-arrow-to-pos arrow))])
-                (values start-x start-y end-x end-y)))
-
-            (define xlb (box 0))
-            (define ylb (box 0))
-            (define xrb (box 0))
-            (define yrb (box 0))
-
-            (define/private (find-poss text left-pos right-pos px py)
-              (send text position-location left-pos xlb ylb #t)
-              (send text position-location right-pos xrb yrb #f)
-              (let*-values ([(xl-off yl-off) (send text editor-location-to-dc-location 
-                                                   (unbox xlb) (unbox ylb))]
-                            [(xl yl) (dc-location-to-editor-location xl-off yl-off)]
-                            [(xr-off yr-off) (send text editor-location-to-dc-location 
-                                                   (unbox xrb) (unbox yrb))]
-                            [(xr yr) (dc-location-to-editor-location xr-off yr-off)])
-                (values (+ xl (* (- xr xl) px))
-                        (+ yl (* (- yr yl) py)))))
-            
-            ;; syncheck:init-arrows : -> void
-            (define/public (syncheck:init-arrows)
-              (set! tacked-hash-table (make-hasheq))
-              (set! arrow-records (make-hasheq))
-              (set! bindings-table (make-hash))
-              (set! cleanup-texts '())
-              (set! definition-targets (make-hash)))
-            
-            #;(define/public (syncheck:arrows-visible?)
-              (or arrow-records cursor-pos cursor-text cursor-eles cursor-tooltip))
-            
-            ;; syncheck:clear-arrows : -> void
-            #;(define/public (syncheck:clear-arrows)
-              (when (syncheck:arrows-visible?)
-                (set! tacked-hash-table #f)
-                (set! arrow-records #f)
-                (when (update-latent-arrows #f #f)
-                  (update-drawn-arrows))
-                (syncheck:clear-coloring)
-                (invalidate-bitmap-cache/padding)))
-            
-            (define/public (syncheck:clear-coloring)
-              (when cleanup-texts
-                (for-each (λ (text) (send text thaw-colorer))
-                          cleanup-texts))
-              (set! cleanup-texts #f))
-
+                [(and snip 
+                      (is-a? snip editor-snip%)
+                      (= pos (send text get-snip-position snip)))
+                 (find-poss text pos pos .5 .5)]
+                [else
+                 (find-poss text pos (+ pos 1) .5 .5)])))
+          (let-values ([(start-x start-y) (find-poss/embedded 
+                                           (tail-arrow-from-text arrow)
+                                           (tail-arrow-from-pos arrow))]
+                       [(end-x end-y) (find-poss/embedded
+                                       (tail-arrow-to-text arrow)
+                                       (tail-arrow-to-pos arrow))])
+            (values start-x start-y end-x end-y)))
         
-            (define/public (syncheck:add-background-color text start fin raw-color)
-              (displayln "add-backgroud-color not implemented")
-              #;(read)
-              #;(when arrow-records
-                (when (is-a? text text:basic<%>)
-                  ;; we adjust the colors over here based on the white-on-black
-                  ;; preference so we don't have to have the preference set up
-                  ;; in the other place when running check syntax in online mode.
-                  (define color 
-                    (if (preferences:get 'framework:white-on-black?)
-                        (cond
-                          [(equal? raw-color "palegreen") "darkgreen"]
-                          [else raw-color])
-                        raw-color))
-                  (add-to-range/key text start fin
-                                    (make-colored-region color text start fin)
-                                    #f #f))))
-
-            ;; add-to-range/key : text number number any any boolean -> void
-            ;; adds `key' to the range `start' - `end' in the editor
-            ;; If use-key? is #t, it adds `to-add' with the key, and does not
-            ;; replace a value with that key already there.
-            ;; If use-key? is #f, it adds `to-add' without a key.
-            ;; pre: arrow-records is not #f
-            (define/private (add-to-range/key text start pre-end to-add key use-key?)
-              (define end (if (= start pre-end) (+ start 1) pre-end))
-              (when (<= 0 start end (send text last-position))
-                (define arrow-record (get-arrow-record text))
-                ;; Dropped the check (< _ (vector-length arrow-vector))
-                ;; which had the following comment:
-                ;;    the last test in the above and is because some syntax objects
-                ;;    appear to be from the original source, but can have bogus information.
-
-                ;; interval-maps use half-open intervals which works out well for positions
-                ;; in the editor, since the interval [0,3) covers the characters just after
-                ;; positions 0, 1, and 2, but not the character at position 3 (positions are
-                ;; between characters)
-                (cond [use-key?
-                       (interval-map-update*! arrow-record start end
-                                              (lambda (old)
-                                                (if (for/or ([x (in-list old)])
-                                                      (and (pair? x) (car x) (eq? (car x) key)))
-                                                    old
-                                                    (cons (cons key to-add) old)))
-                                              null)]
-                      [else
-                       (interval-map-cons*!
-                        arrow-record start end to-add null)])))
+        (define xlb (box 0))
+        (define ylb (box 0))
+        (define xrb (box 0))
+        (define yrb (box 0))
         
-            ;; pre: start-editor, end-editor are embedded in `this' (or are `this')
-            (define/public (syncheck:add-arrow/name-dup/pxpy start-text
-                                                             start-pos-left start-pos-right
-                                                             start-px start-py
-                                                             end-text
-                                                             end-pos-left end-pos-right
-                                                             end-px end-py
-                                                             actual? level require-arrow? name-dup?)
-              (when (and arrow-records
-                         (preferences:get 'drracket:syncheck:show-arrows?))
-                (when (add-to-bindings-table
-                       start-text start-pos-left start-pos-right
-                       end-text end-pos-left end-pos-right)
-                  (let ([arrow (make-var-arrow start-text start-pos-left start-pos-right
-                                               start-px start-py
-                                               end-text end-pos-left end-pos-right
-                                               end-px end-py
-                                               actual? level require-arrow? name-dup?)])
-                    (add-to-range/key start-text start-pos-left start-pos-right arrow #f #f)
-                    (add-to-range/key end-text end-pos-left end-pos-right arrow #f #f)))))
+        (define/private (find-poss text left-pos right-pos px py)
+          (send text position-location left-pos xlb ylb #t)
+          (send text position-location right-pos xrb yrb #f)
+          (let*-values ([(xl-off yl-off) (send text editor-location-to-dc-location 
+                                               (unbox xlb) (unbox ylb))]
+                        [(xl yl) (dc-location-to-editor-location xl-off yl-off)]
+                        [(xr-off yr-off) (send text editor-location-to-dc-location 
+                                               (unbox xrb) (unbox yrb))]
+                        [(xr yr) (dc-location-to-editor-location xr-off yr-off)])
+            (values (+ xl (* (- xr xl) px))
+                    (+ yl (* (- yr yl) py)))))
+        
+        ;; syncheck:init-arrows : -> void
+        (define/public (syncheck:init-arrows)
+          (set! tacked-hash-table (make-hasheq))
+          (set! arrow-records (make-hasheq))
+          (set! bindings-table (make-hash))
+          (set! cleanup-texts '())
+          (set! definition-targets (make-hash)))
+        
+        #;(define/public (syncheck:arrows-visible?)
+            (or arrow-records cursor-pos cursor-text cursor-eles cursor-tooltip))
+        
+        ;; syncheck:clear-arrows : -> void
+        #;(define/public (syncheck:clear-arrows)
+            (when (syncheck:arrows-visible?)
+              (set! tacked-hash-table #f)
+              (set! arrow-records #f)
+              (when (update-latent-arrows #f #f)
+                (update-drawn-arrows))
+              (syncheck:clear-coloring)
+              (invalidate-bitmap-cache/padding)))
+        
+        (define/public (syncheck:clear-coloring)
+          (when cleanup-texts
+            (for-each (λ (text) (send text thaw-colorer))
+                      cleanup-texts))
+          (set! cleanup-texts #f))
+        
+        
+        (define/public (syncheck:add-background-color text start fin raw-color)
+          (displayln "add-backgroud-color not implemented")
+          #;(read)
+          #;(when arrow-records
+              (when (is-a? text text:basic<%>)
+                ;; we adjust the colors over here based on the white-on-black
+                ;; preference so we don't have to have the preference set up
+                ;; in the other place when running check syntax in online mode.
+                (define color 
+                  (if (preferences:get 'framework:white-on-black?)
+                      (cond
+                        [(equal? raw-color "palegreen") "darkgreen"]
+                        [else raw-color])
+                      raw-color))
+                (add-to-range/key text start fin
+                                  (make-colored-region color text start fin)
+                                  #f #f))))
+        
+        ;; add-to-range/key : text number number any any boolean -> void
+        ;; adds `key' to the range `start' - `end' in the editor
+        ;; If use-key? is #t, it adds `to-add' with the key, and does not
+        ;; replace a value with that key already there.
+        ;; If use-key? is #f, it adds `to-add' without a key.
+        ;; pre: arrow-records is not #f
+        (define/private (add-to-range/key text start pre-end to-add key use-key?)
+          (define end (if (= start pre-end) (+ start 1) pre-end))
+          (when (<= 0 start end (send text last-position))
+            (define arrow-record (get-arrow-record text))
+            ;; Dropped the check (< _ (vector-length arrow-vector))
+            ;; which had the following comment:
+            ;;    the last test in the above and is because some syntax objects
+            ;;    appear to be from the original source, but can have bogus information.
             
-            ;; syncheck:add-tail-arrow : text number text number -> void
-            (define/public (syncheck:add-tail-arrow from-text from-pos to-text to-pos)
-              (when (and arrow-records
-                         (preferences:get 'drracket:syncheck:show-arrows?))
-                (let ([tail-arrow (make-tail-arrow to-text to-pos from-text from-pos)])
-                  (add-to-range/key from-text from-pos (+ from-pos 1) tail-arrow #f #f)
-                  (add-to-range/key to-text to-pos (+ to-pos 1) tail-arrow #f #f))))
-            
-            ;; syncheck:add-jump-to-definition : text start end id filename -> void
-            (define/public (syncheck:add-jump-to-definition text start end id filename submods)
-              (displayln "add-jump-to-definition not implemented")
-              #;(read)
-              #;(when arrow-records
-                (add-to-range/key text start end (make-def-link id filename submods) #f #f)))
-            
-            ;; syncheck:add-mouse-over-status : text pos-left pos-right string -> void
-            (define/public (syncheck:add-mouse-over-status text pos-left pos-right str)
-              (displayln "add-mouse-over-status not implemented")
-              #;(when arrow-records
-                (add-to-range/key text pos-left pos-right 
-                                  (make-tooltip-info text pos-left pos-right str)
-                                  #f #f)))
-
-
-
+            ;; interval-maps use half-open intervals which works out well for positions
+            ;; in the editor, since the interval [0,3) covers the characters just after
+            ;; positions 0, 1, and 2, but not the character at position 3 (positions are
+            ;; between characters)
+            (cond [use-key?
+                   (interval-map-update*! arrow-record start end
+                                          (lambda (old)
+                                            (if (for/or ([x (in-list old)])
+                                                  (and (pair? x) (car x) (eq? (car x) key)))
+                                                old
+                                                (cons (cons key to-add) old)))
+                                          null)]
+                  [else
+                   (interval-map-cons*!
+                    arrow-record start end to-add null)])))
+        
+        ;; pre: start-editor, end-editor are embedded in `this' (or are `this')
+        (define/public (syncheck:add-arrow/name-dup/pxpy start-text
+                                                         start-pos-left start-pos-right
+                                                         start-px start-py
+                                                         end-text
+                                                         end-pos-left end-pos-right
+                                                         end-px end-py
+                                                         actual? level require-arrow? name-dup?)
+          (when (and arrow-records
+                     (preferences:get 'drracket:syncheck:show-arrows?))
+            (when (add-to-bindings-table
+                   start-text start-pos-left start-pos-right
+                   end-text end-pos-left end-pos-right)
+              (let ([arrow (make-var-arrow start-text start-pos-left start-pos-right
+                                           start-px start-py
+                                           end-text end-pos-left end-pos-right
+                                           end-px end-py
+                                           actual? level require-arrow? name-dup?)])
+                (add-to-range/key start-text start-pos-left start-pos-right arrow #f #f)
+                (add-to-range/key end-text end-pos-left end-pos-right arrow #f #f)))))
+        
+        ;; syncheck:add-tail-arrow : text number text number -> void
+        (define/public (syncheck:add-tail-arrow from-text from-pos to-text to-pos)
+          (when (and arrow-records
+                     (preferences:get 'drracket:syncheck:show-arrows?))
+            (let ([tail-arrow (make-tail-arrow to-text to-pos from-text from-pos)])
+              (add-to-range/key from-text from-pos (+ from-pos 1) tail-arrow #f #f)
+              (add-to-range/key to-text to-pos (+ to-pos 1) tail-arrow #f #f))))
+        
+        ;; syncheck:add-jump-to-definition : text start end id filename -> void
+        (define/public (syncheck:add-jump-to-definition text start end id filename submods)
+          (displayln "add-jump-to-definition not implemented")
+          #;(read)
+          #;(when arrow-records
+              (add-to-range/key text start end (make-def-link id filename submods) #f #f)))
+        
+        ;; syncheck:add-mouse-over-status : text pos-left pos-right string -> void
+        (define/public (syncheck:add-mouse-over-status text pos-left pos-right str)
+          (displayln "add-mouse-over-status not implemented")
+          #;(when arrow-records
+              (add-to-range/key text pos-left pos-right 
+                                (make-tooltip-info text pos-left pos-right str)
+                                #f #f)))
+        
+        
+        
         
         ;;;;;;;;;;;;;;;;;;;;;;;;;; Arrow Information ;;;;;
         (define/public (replay-compile-comp-trace-aux defs-text val bx) ;;;it is not calling this function fix this
-          (displayln "in replay-compile-comp-trace")
+          #;(displayln "in replay-compile-comp-trace")
           #;(send (send defs-text get-tab) add-bkg-running-color
-                'syncheck "orchid" cs-syncheck-running)
+                  'syncheck "orchid" cs-syncheck-running)
           (define known-dead-place-channels (make-hasheq))
           (let loop ([val val]
                      [start-time (current-inexact-milliseconds)]
@@ -414,18 +419,19 @@
                     (loop val (current-inexact-milliseconds) 0)))
                 #f)]
               [else
-               (displayln val)
+               #;(displayln val)
                (process-trace-element known-dead-place-channels defs-text (car val))
                (loop (cdr val) start-time (+ i 1))])))
         (define/private (process-trace-element known-dead-place-channels defs-text x)
-          (displayln "in process-trace-element")
+          #;(displayln "in process-trace-element")
           ;; using 'defs-text' all the time is wrong in the case of embedded editors,
           ;; but they already don't work and we've arranged for them to not appear here ....
-          (parameterize ((print-syntax-width 9000))
-          (displayln defs-text)
-          (pretty-print defs-text)
-            )
-
+          #;(parameterize ((print-syntax-width 9000))
+              (displayln defs-text)
+              (pretty-print defs-text)
+              (read)
+              )
+          
           (match x
             [`#(syncheck:add-arrow/name-dup/pxpy
                 ,start-pos-left ,start-pos-right ,start-px ,start-py
@@ -433,9 +439,9 @@
                 ,actual? ,level ,require-arrow? ,name-dup-pc ,name-dup-id)
              (define name-dup? (build-name-dup? name-dup-pc name-dup-id  known-dead-place-channels))
              (syncheck:add-arrow/name-dup/pxpy
-                   defs-text start-pos-left start-pos-right start-px start-py
-                   defs-text end-pos-left end-pos-right end-px end-py
-                   actual? level require-arrow? name-dup?)]
+              defs-text start-pos-left start-pos-right start-px start-py
+              defs-text end-pos-left end-pos-right end-px end-py
+              actual? level require-arrow? name-dup?)]
             [`#(syncheck:add-tail-arrow ,from-pos ,to-pos)
              (syncheck:add-tail-arrow defs-text from-pos defs-text to-pos)]
             [`#(syncheck:add-mouse-over-status ,pos-left ,pos-right ,str)
@@ -450,15 +456,15 @@
             [`#(syncheck:add-docs-menu ,start-pos ,end-pos ,key ,the-label ,path ,definition-tag ,tag)
              (displayln "add-docs-menu")
              #;(syncheck:add-docs-menu defs-text start-pos end-pos
-                   key the-label path definition-tag tag)]
+                                       key the-label path definition-tag tag)]
             [`#(syncheck:add-definition-target ,start-pos ,end-pos ,id ,mods)
              (displayln "add-definition-target")
              #;(syncheck:add-definition-target defs-text start-pos end-pos id mods)]
             [`#(syncheck:add-id-set ,to-be-renamed/poss ,name-dup-pc ,name-dup-id)
-               (void)
+             (void)
              #;(define to-be-renamed/poss/fixed
-               (for/list ([lst (in-list to-be-renamed/poss)])
-                 (list defs-text (list-ref lst 0) (list-ref lst 1))))
+                 (for/list ([lst (in-list to-be-renamed/poss)])
+                   (list defs-text (list-ref lst 0) (list-ref lst 1))))
              #;(define name-dup? (build-name-dup? name-dup-pc name-dup-id known-dead-place-channels))
              #;(syncheck:add-id-set to-be-renamed/poss/fixed name-dup?)]))
         
@@ -602,6 +608,382 @@
         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
         (define current-syncheck-running-mode #f)
         
+        ;;;;;aux functions to rename menu callback
+        
+        ;; position->matching-identifiers-hash 
+        ;; : txt pos pos -> (values (listof var-arrow?) hash[(list txt pos pos) -o> #t])
+        (define/private (position->matching-identifiers-hash the-text the-start-pos the-end-pos
+                                                             include-require-arrows?)
+          (define binding-arrows '())
+          (define (add-binding-arrow arr)
+            (when (or include-require-arrows?
+                      (not (var-arrow-require-arrow? arr)))
+              (set! binding-arrows (cons arr binding-arrows))))
+          (if (not the-end-pos)
+              (void)
+          (for ([the-pos (in-range the-start-pos (+ the-end-pos 1))])
+            (define arrs (fetch-arrow-records the-text the-pos))
+            (when arrs
+              (for ([arrow (in-list arrs)])
+                (when (var-arrow? arrow)
+                  (cond
+                    [(and (equal? (var-arrow-start-text arrow) the-text)
+                          (<= (var-arrow-start-pos-left arrow) 
+                              the-pos 
+                              (var-arrow-start-pos-right arrow)))
+                     ;; a binding occurrence => keep it
+                     (add-binding-arrow arrow)]
+                    [else
+                     ;; a bound occurrence => find binders
+                     (for ([candidate-binder 
+                            (in-list (fetch-arrow-records (var-arrow-start-text arrow)
+                                                          (var-arrow-start-pos-left arrow)))])
+                       (when (var-arrow? candidate-binder)
+                         (when (and (equal? (var-arrow-start-text arrow) 
+                                            (var-arrow-start-text candidate-binder))
+                                    (equal? (var-arrow-start-pos-left arrow)
+                                            (var-arrow-start-pos-left candidate-binder))
+                                    (equal? (var-arrow-start-pos-right arrow)
+                                            (var-arrow-start-pos-right candidate-binder)))
+                           (add-binding-arrow candidate-binder))))]))))))
+          
+          (define identifiers-hash #f)
+          (define (add-one txt start end)
+            (hash-set! identifiers-hash (list txt start end) #t))
+          (define (get-identifiers-hash)
+            (unless identifiers-hash
+              (set! identifiers-hash (make-hash))
+              (define already-considered (make-hash))
+              (for ([binding-arrow (in-list binding-arrows)])
+                (add-one (var-arrow-start-text binding-arrow)
+                         (var-arrow-start-pos-left binding-arrow)
+                         (var-arrow-start-pos-right binding-arrow))
+                (define range-to-consider
+                  (cons (var-arrow-start-pos-left binding-arrow)
+                        (var-arrow-start-pos-right binding-arrow)))
+                (unless (hash-ref already-considered range-to-consider #f)
+                  (hash-set! already-considered range-to-consider #t)
+                  (for ([pos (in-range (car range-to-consider) (cdr range-to-consider))])
+                    (for ([arrow (in-list (fetch-arrow-records 
+                                           (var-arrow-start-text binding-arrow)
+                                           pos))])
+                      (when (var-arrow? arrow)
+                        (when (or include-require-arrows?
+                                  (not (var-arrow-require-arrow? arrow)))
+                          (when (and (equal? (var-arrow-start-text arrow)
+                                             (var-arrow-start-text binding-arrow))
+                                     (equal? (var-arrow-start-pos-left arrow)
+                                             (var-arrow-start-pos-left binding-arrow))
+                                     (equal? (var-arrow-start-pos-right arrow)
+                                             (var-arrow-start-pos-right binding-arrow)))
+                            (add-one (var-arrow-end-text arrow)
+                                     (var-arrow-end-pos-left arrow)
+                                     (var-arrow-end-pos-right arrow))))))))))
+            identifiers-hash)
+           (if (not the-end-pos)
+              (values null null)
+          (values binding-arrows get-identifiers-hash)))
+        
+        ;; sort-and-merge : (listof (cons number number)) -> (listof (cons number number))
+        ;; the result is guaranteed to be non-overlapping ranges, 
+        ;; sorted from smallest to largest
+        (define (sort-and-merge start+ends)
+          (define sorted-positions (sort start+ends < #:key car))
+          (let loop ([positions sorted-positions])
+            (cond
+              [(null? positions) '()]
+              [(null? (cdr positions)) positions]
+              [else
+               (define fst (car positions))
+               (define snd (cadr positions))
+               (cond
+                 [(<= (cdr fst) (car snd)) ;; no overlap
+                  (cons fst (loop (cdr positions)))]
+                 [else
+                  (define merged (cons (car fst) (max (cdr fst) (cdr snd))))
+                  (loop (cons merged (cddr positions)))])])))
+        
+        ;; find-name-to-offer : (non-empty-listof identifier?) -> string?
+        (define/private (find-name-to-offer binding-var-arrows)
+          (define longest-var-arrow
+            (car 
+             (sort binding-var-arrows
+                   >
+                   #:key (λ (x) (- (var-arrow-start-pos-right x)
+                                   (var-arrow-start-pos-left x))))))
+          (send (var-arrow-start-text longest-var-arrow)
+                get-text
+                (var-arrow-start-pos-left longest-var-arrow)
+                (var-arrow-start-pos-right longest-var-arrow)))
+        
+        ;; find-parent : menu-item-container<%> -> (union #f (is-a?/c top-level-window<%>)
+        (define/private (find-menu-parent menu)
+          (let loop ([menu menu])
+            (cond
+              [(is-a? menu menu-bar%) (send menu get-frame)]
+              [(is-a? menu popup-menu%)
+               (let ([target (send menu get-popup-target)])
+                 (cond
+                   [(is-a? target editor<%>) 
+                    (let ([canvas (send target get-canvas)])
+                      (and canvas
+                           (send canvas get-top-level-window)))]
+                   [(is-a? target window<%>) 
+                    (send target get-top-level-window)]
+                   [else #f]))]
+              [(is-a? menu menu-item<%>) (loop (send menu get-parent))]
+              [else #f])))
+        
+        
+        ;;;;;;;;;;;Rename Menu callback
+        
+        (define (rename-menu-callback make-identifiers-hash name-to-offer
+                                      binding-identifiers parent text)              
+          (define (name-dup? x) 
+            (for/or ([var-arrow (in-list binding-identifiers)])
+              ((var-arrow-name-dup? var-arrow) x)))
+          (define new-str
+            (fw:keymap:call/text-keymap-initializer
+             (λ ()
+               (get-text-from-user
+                (string-constant cs-rename-id)
+                (fw:gui-utils:format-literal-label (string-constant cs-rename-var-to) 
+                                                   name-to-offer)
+                parent
+                name-to-offer
+                #:dialog-mixin frame:focus-table-mixin))))
+          (when new-str
+            (define new-sym (format "~s" (string->symbol new-str)))
+            (define dup-name? (name-dup? new-sym))
+            ;;;changes
+            (define imported? #f)
+            ;;; end change
+            (define do-renaming?
+              (or (not dup-name?)
+                  (equal?
+                   (message-box/custom
+                    (string-constant check-syntax)
+                    (fw:gui-utils:format-literal-label
+                     (string-constant cs-name-duplication-error) 
+                     new-sym)
+                    (string-constant cs-rename-anyway)
+                    (string-constant cancel)
+                    #f
+                    parent
+                    '(stop default=2)
+                    #:dialog-mixin frame:focus-table-mixin)
+                   1)))
+            
+            (when do-renaming?
+              (define edit-sequence-txts (list text))
+              (define per-txt-positions (make-hash))
+              ;;;; CHANGES
+              
+              (define (normal-rename per-txt-positions)
+                (for ([(source-txt start+ends) (in-hash per-txt-positions)])
+                  (when (is-a? source-txt text%)
+                    (define merged-positions (sort-and-merge start+ends))
+                    (send text begin-edit-sequence)
+                    (for ([start+end (in-list (reverse merged-positions))])
+                      (define start (car start+end))
+                      (define end (cdr start+end))
+                      (unless (memq source-txt edit-sequence-txts)
+                        (send source-txt begin-edit-sequence)
+                        (set! edit-sequence-txts (cons source-txt edit-sequence-txts)))
+                      (send source-txt delete start end #f)
+                      (send source-txt insert new-sym start start #f)))))
+              
+              
+              
+              
+              (for ([(k _) (in-hash (make-identifiers-hash))])
+                (define-values (txt start-pos end-pos) (apply values k))
+                (hash-set! per-txt-positions txt 
+                           (cons (cons start-pos end-pos)
+                                 (hash-ref per-txt-positions txt '()))))
+              
+              
+              (normal-rename per-txt-positions)
+              #;(send text end-edit-sequence)
+              (for ([txt (in-list edit-sequence-txts)])
+                (send txt end-edit-sequence)))))
+        ;;;; Extract function
+        
+        ;; callback for the Added-menu Extract Method
+        (define/private (extract-function make-identifiers-hash binding-identifiers parent text start-selection end-selection binding-aux #:python? [python? #f])
+          (define (name-dup? x) 
+            (for/or ([var-arrow (in-list binding-identifiers)])
+              ((var-arrow-name-dup? var-arrow) x)))
+          (define new-str
+            (fw:keymap:call/text-keymap-initializer
+             (λ ()
+               (get-text-from-user
+                (fw:gui-utils:format-literal-label "Extract Function")
+                (fw:gui-utils:format-literal-label "Name of the new function")
+                parent
+                (fw:gui-utils:format-literal-label "name") ;check if name colides?? 
+                #:dialog-mixin frame:focus-table-mixin))))
+          
+          
+          (when new-str
+            (define new-sym (format "~s" (string->symbol new-str)))
+            (define dup-name? (name-dup? new-sym))
+            
+            ;;check the name of the new function
+            (define do-extraction?
+              (or (not dup-name?)
+                  (equal?
+                   (message-box/custom
+                    (string-constant check-syntax)
+                    (fw:gui-utils:format-literal-label
+                     (string-constant cs-name-duplication-error) 
+                     new-sym)
+                    (string-constant cs-rename-anyway)
+                    (string-constant cancel)
+                    #f
+                    parent
+                    '(stop default=2)
+                    #:dialog-mixin frame:focus-table-mixin)
+                   1)))
+            
+            ;;actual extract
+            (when do-extraction?
+              (define edit-sequence-txts (list text))
+              (define per-txt-positions (make-hash))
+              (define (create-call-method method-name)
+                (if python?
+                    (string-append method-name "( " (string-append*  (add-between (string-split (get-args)) ",")) ")")
+                (string-append "(" method-name " " (get-args) ")")))
+
+              (define (check-arrow var-arrow)
+                (define start-selection (send text get-start-position))
+                (define end-selection (send text get-end-position))
+                (define last-line (send text last-line))
+                (displayln last-line)
+                ;;find-line uses location, not position. must convert before!
+                (define start-box (box 1))
+                (define end-box (box 1))
+                (define last-box (box 1))
+                (send text position-location start-selection #f start-box #t #f #f);Check this!
+                (send text position-location end-selection #f end-box #t #f #f);Check this!
+                (send text position-location last-line #f last-box #t #f #f) ;Trying
+                (define start-line (send text find-line (unbox start-box)))
+                (define end-line (send text find-line (unbox end-box)))
+                ;;;if from #lang racket or form require
+                ;;; transform from position to location
+                (define (check-lang var-arrow)
+                  ;;first syntatic object (might be good enough)
+                  (not (or (eq? (syntax-e (get-syntax-value (var-arrow-start-pos-left var-arrow))) 'racket)
+                           (eq? (syntax-e (get-syntax-value (var-arrow-start-pos-left var-arrow))) 'python/lang/python))))
+                (define (check-imports var-arrow)
+                  ;;;
+                  #t)
+                (and (check-lang var-arrow) (check-imports var-arrow)))
+              
+              (define (get-args)
+                (define args-pos (list))
+                (define args "")
+                (define (travel-args) 
+                  (for ([var-arrow (in-list binding-aux)]) ;check if the arrow counts,
+                    
+                    
+                    (displayln (var-arrow-level var-arrow))
+                    (begin
+                      (if (and (or (< (var-arrow-start-pos-left var-arrow) start-selection)
+                                   (> (var-arrow-start-pos-right var-arrow) end-selection))
+                               (check-arrow var-arrow)) ; check if add args.
+                          (begin 
+                            (display "get-text value: ")
+                            (displayln (send text get-text  (var-arrow-start-pos-left var-arrow) (var-arrow-start-pos-right var-arrow)))
+                            
+                            (set! args-pos (cons var-arrow args-pos))
+                            )
+                          (begin
+                            (displayln "no args")
+                            ;(display "Arrow fail ")
+                            ;(displayln var-arrow))
+                            )))))
+                (travel-args)
+                (for ([var-arrow (in-list args-pos)])
+                  (begin
+                    (set! args (string-append args " " (send text get-text (var-arrow-start-pos-left var-arrow) (var-arrow-start-pos-right var-arrow))))))
+                
+                (set! args (string-join (remove-duplicates (string-split args)))) ;remove duplicates
+                (string-normalize-spaces args)
+                (display "args ")
+                (displayln args)
+                args)
+              
+              (define (create-method method-body method-name)
+                (string-append "\n(define (" method-name " "(get-args) ")" "\n  " method-body ")" ))
+              (define (create-method-python method-body method-name)
+                (string-append "\ndef " method-name "( " (string-append*  (add-between (string-split (get-args)) ",")) "):\n    " method-body)) ;;missing return
+              
+              
+              ;(displayln "define method-definition")
+              (define method-definition (send text get-text start-selection end-selection #t #t))
+              
+              (define (get-body)
+                ;;;TODO implement for python and other languages with returns
+                (void))
+              
+              (send text begin-edit-sequence)
+              ;(displayln "begin")
+              (unless (memq text edit-sequence-txts)
+                (send text begin-edit-sequence)
+                (set! edit-sequence-txts (cons text edit-sequence-txts)))
+              ;(displayln "before delete")
+              (send text delete start-selection end-selection)
+              ;(displayln "before insert")
+              (send text insert (create-call-method new-str) start-selection)
+              ;(displayln "before move")
+              
+              ;In order to put the new changes in the clipboard
+              ;write the text in the last position of the file, then "cut" it
+              (let ([last-pos (send text last-position)])
+                (if python?
+                    (send text insert (create-method-python method-definition new-str) last-pos last-pos)
+                    (send text insert (create-method method-definition new-str) last-pos last-pos))
+                (send text cut #f 0 last-pos (send text last-position))) ; time stamp might fail really hard.)
+              (for ([txt (in-list edit-sequence-txts)])
+                (send txt end-edit-sequence))
+
+              (fw:keymap:call/text-keymap-initializer
+                 (λ ()
+                   (message-box/custom ;;;Its buggy... fix this
+                    (fw:gui-utils:format-literal-label "Title Extract-Function End")
+                    (fw:gui-utils:format-literal-label "The Extracted Function is now on your Clipboard")
+                    (fw:gui-utils:format-literal-label "Ok")
+                    ;(string-constant cancel)
+                    #f ;#f means that we are not using this button, maximum is 3 button
+                    #f
+                    parent
+                    '(caution default=1)
+                    #:dialog-mixin frame:focus-table-mixin)))
+              )))
+        
+        ;;;;; end refactoring functions
+        
+        (define (get-syntax-value start-position #:expanded? [expanded? #f])
+          (define start-selection (send text get-start-position))
+          (define end-selection (send text get-end-position))
+          (define last-line (send text last-line))
+          (displayln last-line)
+          ;;find-line uses location, not position. must convert before!
+          (define start-box (box 1))
+          (define end-box (box 1))
+          (define last-box (box 1))
+          (send text position-location start-selection #f start-box #t #f #f);Check this!
+          (send text position-location end-selection #f end-box #t #f #f);Check this!
+          (send text position-location last-line #f last-box #t #f #f) ;Trying
+          (send text position-location start-position #f start-box #t #f #f);Check this!
+          (define start-line (send text find-line (unbox start-box)))
+          (define end-line (send text find-line (unbox end-box)))
+          (define last-line-pos (send text find-line (unbox last-box)))
+          (if expanded?
+              (code-walker expanded-program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line))
+              (code-walker-non-expanded non-expanded-program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line))))
+        
         (define (printPython tab interactions expanded? #:print-expanded-form? [expanded-form? #f])
           (define start-selection (send text get-start-position))
           (define end-selection (send text get-end-position))
@@ -660,9 +1042,9 @@
                                   'drracket:check-syntax:status status-coloring-program)
                                (parameterize ([current-annotations definitions-text])
                                  (begin
-                                   #;(print-languages-syntax sexp #t (get-definitions-text) start-selection end-selection start-line end-line last-line (get-editor%))
-                                   (parameterize ((print-syntax-width 9000))
-                                     (displayln sexp))
+                                   (print-languages-syntax sexp #t (get-definitions-text) start-selection end-selection start-line end-line last-line)
+                                   #;(parameterize ((print-syntax-width 9000))
+                                       (displayln sexp))
                                    (expanded-expression sexp)))
                                #;(close-status-line 'drracket:check-syntax:status))))))
                        (loop)])))))
@@ -683,7 +1065,7 @@
                        (displayln sexp)
                        (parameterize ((print-syntax-width 9000))
                          (displayln sexp))
-                       (displayln not-expanded-program)
+                       (displayln non-expanded-program)
                        (print-languages-syntax sexp #f (get-definitions-text) start-selection end-selection
                                                start-line end-line last-line)
                        
@@ -694,7 +1076,7 @@
         (define (refactoring-syntax tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f] 
                                     #:detect-refactorings [detect-refactorings? #f] #:get-refactoring-string [get-refactoring-string #f] #:check-refactorings [check-refactorings? #f])
           
-
+          
           (dump-arrow-records)
           (displayln "end arrow")
           (define interactions-text interactions)
@@ -1011,7 +1393,7 @@
                      (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line last-line last-line auto-refactoring? detect-refactorings? get-refactoring-string)
                      (parameterize ((print-syntax-width 9000))
                        (displayln sexp))
-                     (displayln not-expanded-program)
+                     (displayln non-expanded-program)
                      (loop)])) 
                 #t)))
             (unless (>= start-line last-line)
@@ -1092,7 +1474,7 @@
                          (displayln sexp)
                          (parameterize ((print-syntax-width 9000))
                            (displayln sexp))
-                         (displayln not-expanded-program)
+                         (displayln non-expanded-program)
                          (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings? get-refactoring-string)
                          
                          (loop)])) 
@@ -1168,6 +1550,12 @@
         (send AutomaticRefactoring enable #t)
         
         (define (create-refactoring-menu menu bool pos text)
+          (define need-a-sep? (not #f))
+          (define (add-sep) 
+            (unless need-a-sep? 
+              (set! need-a-sep? #t)
+              (when need-a-sep?
+                (new separator-menu-item% [parent menu]))))
           (define refactoring-menu
             (make-object menu%
               "Refactoring Test Plugin"
@@ -1184,11 +1572,88 @@
                   refactoring-menu
                   (λ (item evt)
                     (printPython (get-current-tab) (get-interactions-text) #f))))
+          (add-sep)
           (make-object menu-item%
             "Print expanded form"
             refactoring-menu
             (λ (item evt)
               (printPython (get-current-tab) (get-interactions-text) #t #:print-expanded-form? #t)))
+          
+          ;;;;aux functions
+          (define start-selection (send (get-definitions-text) get-start-position))
+          (define end-selection (send (get-definitions-text) get-end-position))
+          (define-values (binding-identifiers make-identifiers-hash)
+            (position->matching-identifiers-hash text pos pos #t))
+          ;I have access to the binding-identifiers and the make-identifiers-hash
+          (define-values (binding-aux make-identifiers-aux) ;the binding idenfitiers of the selection
+            (position->matching-identifiers-hash text start-selection end-selection #t))
+          
+          (define (compute-imports) ;No imports?
+            (displayln start-selection)
+            (displayln end-selection)
+            (set! binding-aux (remove-duplicates binding-aux = #:key(lambda (x) (var-arrow-end-pos-left x))))
+            ;(display binding-aux)
+            ;(displayln "teste")
+            (let ([return #f])
+              (for ([var-arrow (in-list binding-aux)]) ;check if the arrow is "import" or "require" 
+                (begin
+                  (let ([name (send text get-text  (var-arrow-end-pos-left var-arrow) (var-arrow-end-pos-right var-arrow))])
+                    
+                    (when (and (or (and (>= (var-arrow-end-pos-left var-arrow) start-selection)
+                                        (<= (var-arrow-end-pos-right var-arrow) end-selection))
+                                   (and (>= (var-arrow-start-pos-left var-arrow) start-selection)
+                                        (<= (var-arrow-start-pos-right var-arrow) end-selection))
+                                   )
+                               (or (string=? name "import") 
+                                   (string=? name "require" )))
+                      (begin
+                        ;(displayln name)
+                        (set! return #t))  ; check if add args.
+                      ))))
+              ;(displayln return)
+              return))
+          
+          ;;;;
+          (unless (null? binding-identifiers)
+            (define name-to-offer (find-name-to-offer binding-identifiers))
+            (new menu-item%
+                 [parent menu]
+                 [label (fw:gui-utils:format-literal-label (string-constant cs-rename-var)
+                                                           name-to-offer)]
+                 [callback
+                  (λ (x y)
+                    (let ([frame-parent (find-menu-parent menu)])
+                      (rename-menu-callback make-identifiers-hash
+                                            name-to-offer 
+                                            binding-identifiers
+                                            frame-parent (get-interactions-text ))))]))
+          #;(add-sep)
+          
+          (unless (null? binding-aux) ;binding-aux check this!
+            ;(define name-to-offer (find-name-to-offer binding-identifiers))
+            ;;;;aux functions
+            (displayln (send text get-text))
+            (make-object menu-item%
+              "Extract Function"
+              menu
+              (λ (item evt)
+                (let ([frame-parent (find-menu-parent menu)])
+                  ; (what-is? menu) is an editor
+                  (displayln start-selection)
+                  (displayln end-selection)
+                  (extract-function make-identifiers-hash binding-identifiers
+                                    frame-parent text start-selection end-selection binding-aux)))))
+          (make-object menu-item%
+              "Extract Function"
+              menu
+              (λ (item evt)
+                (let ([frame-parent (find-menu-parent menu)])
+                  ; (what-is? menu) is an editor
+                  (displayln start-selection)
+                  (displayln end-selection)
+                  (extract-function make-identifiers-hash binding-identifiers
+                                    frame-parent text start-selection end-selection binding-aux #:python? #t))))
+          
           (displayln "$$$$$$$$$$$$$$$$$$$$$$$$$$ LABEL")
           (displayln (send RefactoringOperations get-label))
           (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:get-refactoring-string #t)
@@ -1201,7 +1666,14 @@
              (old menu editor event)
              (define-values (pos text) (send (get-definitions-text) get-pos/text event))
              
-             (create-refactoring-menu menu #f pos text))))))
+             (create-refactoring-menu menu #f pos text))))
+        #;(keymap:add-to-right-button-menu/before
+           (let ([old (keymap:add-to-right-button-menu/before)])
+             (λ (menu editor event)
+               (old menu editor event)
+               (define-values (pos text) (send (get-definitions-text) get-pos/text event))
+               
+               (create-refactoring-menu menu #f pos text))))))
     
     ;;;;Menus definitions (lack a better idea on how to do this)
     (define detect null)
@@ -1312,21 +1784,21 @@
                           (send detect enable #t)
                           (send clear enable #f)
                           (send text unhighlight-ranges/key 'key))))))))
-
-
+    
+    
     (define next-trace-refresh? #t)
-        (define (get-next-trace-refresh?) next-trace-refresh?)
-        (define (set-next-trace-refresh b) (set! next-trace-refresh? b))
-        (define current-replay-state #f)
-        (define (set-replay-state rs) (set! current-replay-state #f))
-        (define (get-replay-state) current-replay-state)
-         
+    (define (get-next-trace-refresh?) next-trace-refresh?)
+    (define (set-next-trace-refresh b) (set! next-trace-refresh? b))
+    (define current-replay-state #f)
+    (define (set-replay-state rs) (set! current-replay-state #f))
+    (define (get-replay-state) current-replay-state)
+    
     (drracket:module-language-tools:add-online-expansion-monitor
      online-comp.rkt
      'monitor
      (λ (defs-text val)
        (define tab (send defs-text get-tab))
-       (displayln "on monitor")
+       #;(displayln "on monitor")
        (cond
          [(drracket:module-language-tools:start? val) (set-next-trace-refresh #t)]
          [(drracket:module-language-tools:done? val) (void)]
@@ -1339,7 +1811,7 @@
           ;;                            -- pick up some new elements to add to the current replay
           ;;             #f))           -- doesn't actually get set on a tab, but this means to
           ;;                               just stop running the replay
-          (displayln "else in cond")
+          #;(displayln "else in cond")
           
           (when (get-next-trace-refresh?)
             (define old-replay-state (get-replay-state))
@@ -1359,18 +1831,42 @@
           (cond
             [(string? val) ;; an internal error happened
              (displayln "in val")
-             (displayln val)
+             #;(displayln val)
              #;(send tab remove-bkg-running-color 'syncheck)
              #;(send tab show-online-internal-error val)]
             [else
-             (displayln "else in cond in else")
+             #;(displayln "else in cond in else")
              (displayln val)
+             #;(read)
+             
+             ;;;;;;;;;;;;;;;
+             ;;Add information to use with the arrows:
+             ;;non-expanded-program and expanded-program             
+             ((λ ()
+                ((drracket:eval:traverse-program/multiple
+                  #:gui-modules? #f
+                  (send defs-text get-next-settings)
+                  void
+                  void)
+                 (drracket:language:make-text/pos defs-text
+                                                  0
+                                                  (send defs-text last-position))
+                 (λ (sexp loop) ;this is the "iter"
+                   (cond
+                     [(eof-object? sexp)
+                      (void)
+                      #;(custodian-shutdown-all #f)]
+                     [else
+                      (set! non-expanded-program sexp)
+                      (loop)])) 
+                 #t)))
+             ;;;;;;;;;;;;;;;
              (define current-replay-state (get-replay-state))
              (cond
                [(not current-replay-state)
                 (define new-replay-state (box '()))
                 (set-replay-state new-replay-state)
-                (displayln "before replay-compile-comp-trace")
+                #;(displayln "before replay-compile-comp-trace")
                 (send drr-frame replay-compile-comp-trace-aux
                       defs-text
                       val

@@ -1,5 +1,7 @@
 # RefactoringToolDevelop
 
+
+This plugin works for racker 6.3 
 Prove of concept of a Racket and Python refactoring tool, or in other words a refactoring framework.
 
 This refactoring tool is quite fragile, be patient, double check the refactoring
