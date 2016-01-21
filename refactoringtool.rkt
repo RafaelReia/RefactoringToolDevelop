@@ -293,7 +293,8 @@
         
         
         (define/public (syncheck:add-background-color text start fin raw-color)
-          (displayln "add-backgroud-color not implemented")
+          (void)
+          #;(displayln "add-backgroud-color not implemented")
           #;(read)
           #;(when arrow-records
               (when (is-a? text text:basic<%>)
@@ -372,14 +373,16 @@
         
         ;; syncheck:add-jump-to-definition : text start end id filename -> void
         (define/public (syncheck:add-jump-to-definition text start end id filename submods)
-          (displayln "add-jump-to-definition not implemented")
+          (void)
+          #;(displayln "add-jump-to-definition not implemented")
           #;(read)
           #;(when arrow-records
               (add-to-range/key text start end (make-def-link id filename submods) #f #f)))
         
         ;; syncheck:add-mouse-over-status : text pos-left pos-right string -> void
         (define/public (syncheck:add-mouse-over-status text pos-left pos-right str)
-          (displayln "add-mouse-over-status not implemented")
+          (void)
+          #;(displayln "add-mouse-over-status not implemented")
           #;(when arrow-records
               (add-to-range/key text pos-left pos-right 
                                 (make-tooltip-info text pos-left pos-right str)
@@ -451,14 +454,17 @@
             [`#(syncheck:add-jump-to-definition ,start ,end ,id ,filename ,submods)
              (syncheck:add-jump-to-definition defs-text start end id filename submods)]
             [`#(syncheck:add-require-open-menu ,start-pos ,end-pos ,file)
-             (displayln "require-open-menu")
+             (void)
+          #;(displayln "require-open-menu")
              #;(syncheck:add-require-open-menu defs-text start-pos end-pos file)] ;;got an error, might be useful...
             [`#(syncheck:add-docs-menu ,start-pos ,end-pos ,key ,the-label ,path ,definition-tag ,tag)
-             (displayln "add-docs-menu")
+             (void)
+          #;(displayln "add-docs-menu")
              #;(syncheck:add-docs-menu defs-text start-pos end-pos
                                        key the-label path definition-tag tag)]
             [`#(syncheck:add-definition-target ,start-pos ,end-pos ,id ,mods)
-             (displayln "add-definition-target")
+             (void)
+          #;(displayln "add-definition-target")
              #;(syncheck:add-definition-target defs-text start-pos end-pos id mods)]
             [`#(syncheck:add-id-set ,to-be-renamed/poss ,name-dup-pc ,name-dup-id)
              (void)
@@ -1077,7 +1083,7 @@
                                     #:detect-refactorings [detect-refactorings? #f] #:get-refactoring-string [get-refactoring-string #f] #:check-refactorings [check-refactorings? #f])
           
           
-          (dump-arrow-records)
+          #;(dump-arrow-records)
           (displayln "end arrow")
           (define interactions-text interactions)
           ;;;;;;;;;;;;;;;;;; Editor information
@@ -1508,7 +1514,7 @@
                          (displayln "#####################")
                          (displayln loop)
                          (displayln sexp))
-                       (displayln (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings? get-refactoring-string))
+                       #;(displayln (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings? get-refactoring-string))
                        (set! result (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings? get-refactoring-string))
                        (loop)])) 
                   #t)))
@@ -1523,7 +1529,7 @@
                 refactoring-menu
                 (λ (item evt)
                   (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #t))))
-        (make-object menu-item%
+        #;(make-object menu-item%
           ;(get-refactoring-string)
           "Check Refactoring"
           refactoring-menu
@@ -1719,10 +1725,15 @@
         (displayln stx))
       
       (define (search-refactorings-highlight start)
+        #;(read)
         (displayln start)
         (displayln last-line)
         (define aux (code-walker-non-expanded program (+ 1 start) (+ 1 last-line) (+ 1 last-line)))
         (unless (void? (racket-parser aux))
+          (displayln "SYNTAX FOUND")
+          (parameterize ((print-syntax-width 9000))
+            (displayln aux))
+          (read)
           (if (regexp-match #rx"(\n)" (syntax->string aux))            
               (send text highlight-range (- (syntax-position aux) 1) (+ 1 (string-length (syntax->string aux)) (syntax-position aux) 
                                                                         (length(regexp-match #rx"(\n)" (syntax->string aux))))
@@ -1836,7 +1847,7 @@
              #;(send tab show-online-internal-error val)]
             [else
              #;(displayln "else in cond in else")
-             (displayln val)
+             #;(displayln val)
              #;(read)
              
              ;;;;;;;;;;;;;;;

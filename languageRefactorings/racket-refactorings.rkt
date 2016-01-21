@@ -10,6 +10,9 @@
   (displayln "inside racket-parser")
   (displayln arg)
   (define return (void))
+  ;;;;Before general rules to not overlap.
+ 
+  
   (syntax-parse arg
     #:datum-literals (cons if not > <= >= < and lambda map length list when begin let)
     [(not (> a b))
@@ -20,22 +23,17 @@
      (set! return #'(>= a b))]
     [(not (>= a b))
      (set! return #'(< a b))]
-    [(if test-expr then-expr else-expr)
-     (begin
-       (when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
-         (set! return #'(not test-expr)))
-       (when (and (syntax->datum #'then-expr) (not (syntax->datum #'else-expr)))
-         (set! return #'test-expr))
-       (when (equal? '(void) (syntax->datum #'else-expr)) 
-         (set! return #'(when test-expr then-expr)))
-       (when (equal? '(void) (syntax->datum #'then-expr)) 
-         (set! return #'(unless test-expr else-expr))))]
     [(if test-expr #t else-expr)
-     (when (and (boolean? (eval-syntax #'test-expr)) (boolean? (eval-syntax #'else-expr)))
+     (set! return #'(or test-expr else-expr))
+     #;(when (and (boolean? (eval-syntax #'test-expr)) (boolean? (eval-syntax #'else-expr)))
        (set! return #'(or test-expr else-expr)))]
+    #;[(if test-expr #f else-expr)
+     'ok]
     [(if test-expr then-expr #f)
-     (when (and (boolean? (eval-syntax #'test-expr)) (boolean? (eval-syntax #'then-expr)))
+     (set! return #'(and test-expr then-expr))
+     #;(when (and (boolean? (eval-syntax #'test-expr)) (boolean? (eval-syntax #'then-expr)))
        (set! return #'(and test-expr then-expr)))]
+    #;[(if test-expr then-expr #t) 'ok]
     [(and (< x y) (< v z))
      (when (equal? (syntax->datum #'y) (syntax->datum #'v))
        (set! return #'(< x y z)))]
@@ -49,6 +47,18 @@
     ;[(cons x (list y ... v)) (write-back #'(list x y ... v))]
     [(and (and ?x ...) ?y ...) (set! return #'(and ?x ... ?y ...))] ;;;;;;;; (and (and ?x ... ) ?y...) -> (and ?x ... ?y...)
     [(if ?x ?y #f) (set! return #'(when ?x ?y))] ;;;;;;;; (if ?x ?y #f) -> (when ?x ?y) ;;Should be improved, automatic refactoring might have a deadlock
+    [(if test-expr #f #t) (set! return #'(not test-expr))]
+    [(if test-expr #t #f) (set! return #'test-expr)]
+    [(if test-expr then-expr else-expr)
+     (begin
+       #;(when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
+         (set! return #'(not test-expr))) ;;; buggyy
+       #;(when (and (syntax->datum #'then-expr) (not (syntax->datum #'else-expr)))
+         (set! return #'test-expr)) ;;;buggy
+       (when (equal? '(void) (syntax->datum #'else-expr)) 
+         (set! return #'(when test-expr then-expr)))
+       (when (equal? '(void) (syntax->datum #'then-expr)) 
+         (set! return #'(unless test-expr else-expr))))]
     [(when ?x (begin ?y ...)) (set! return #'(when ?x (?y ...)))] ;;;;;;; (when ?x (begin ?y ...)) -> (when ?x ?y ...)
     [(let ?x (begin ?y ...)) (set! return #'(let ?x ?y ...))] ;;;;; (let ?x (begin ?y...)) -> (let ?x ?y ...)
     [(ft (lambda (arg-aux) (ftn arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2)) (set! return #'(ft ftn arg))] ;this has a bug.
@@ -56,7 +66,7 @@
     [(let* name ((i e:expr) ...) ?y) (set! return #'(define (name i ...) ?y))]
     [_ (void)])
   
-  (define (cond-to-if arg) ;;Improve
+  #;(define (cond-to-if arg) ;;Improve
     (define (write-if conds thens last-else)
       (define aux-result null)
       (define result null)
@@ -109,7 +119,8 @@
       (define (parse-if stx)  ;;; This has a bug!! improve
         (syntax-parse stx
           [(if test-expr then-expr else-expr)  
-           (begin 
+           (begin
+             ;;add check in here, check weather the first else-expr has an if. (tricky hack :( )
              (set! list-tests (cons #'test-expr list-tests))
              (set! list-thens (cons #'then-expr list-thens))
              (parse-if #'else-expr))]
@@ -125,13 +136,12 @@
                          #,@(create-conds list-tests)
                          [else #, else-aux]))))
     (parser1 arg)
-    (displayln "%%%%%%%%%%%%%%%%%%%%%%%")
-    (parameterize ((print-syntax-width 9000))
-      (displayln result))
+
     (unless (null? result)
       (set! return result)))
-  (cond-to-if arg)
-  (if-to-cond arg)
+  #;(when (void? return)
+  #;(cond-to-if arg) ;;bugs, a lot of false positives
+  (if-to-cond arg)) ;;has a slighty bug that needs to be corrected.
   return)
 
 

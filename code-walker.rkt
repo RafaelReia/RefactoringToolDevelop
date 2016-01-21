@@ -10,6 +10,8 @@
     (parameterize ((print-syntax-width 9000))
       (displayln (cdr (syntax-e aux)))) ;;clean #%app
     (syntax-e aux))
+    (displayln "result")
+  (displayln aux)
   aux)
 
 (define (code-walker-non-expanded code start end lastline)
@@ -26,25 +28,25 @@
   (define stop? #f)
   (define source-stack (list))
   (define aux-result null)
-  (displayln (syntax-source program))
+  #;(displayln (syntax-source program))
   (define source-location (syntax-source program))
   (define (get-syntax program start end)
     (define source-aux program)
     (define check-line #t)
     (define result null)
     (define aux-result? #t)
-    (displayln "source-aux is syntax? ")
-    (displayln (syntax? source-aux))
+    #;(displayln "source-aux is syntax? ")
+    #;(displayln (syntax? source-aux))
     #;(parameterize ((print-syntax-width 9000))
         (displayln source-aux)
         (displayln source-stack))
     (define (get-next-compare source-aux source-stack)
       ;else says its bigger than the last part of the selection, could be the end of the program either. this happens when there is no next element.
-      (displayln "SOURCE-AUX")
-      (displayln source-aux)
-      (displayln "NEXT COMPARE")
+      #;(displayln "SOURCE-AUX")
+      #;(displayln source-aux)
+      #;(displayln "NEXT COMPARE")
       (define aux (+ end 1))
-      (parameterize ((print-syntax-width 9000))
+      #;(parameterize ((print-syntax-width 9000))
         (displayln source-stack)
         (displayln (syntax? source-stack))
         #;(unless (null? source-stack)
@@ -58,10 +60,10 @@
       aux)
     (cond [(null? source-aux)
            (set! stop? #t)
-           (displayln "It's null")]
+           #;(displayln "It's null")]
           [stop? (displayln "evaluation stopped")]
           [(pair? source-aux)
-           (displayln "It's pair")
+           #;(displayln "It's pair")
            (set! source-stack (cons (cdr source-aux) source-stack)) ;;add to stack
            (set! source-aux (car source-aux))
            (get-syntax source-aux start end)]
@@ -93,23 +95,23 @@
                              (not (string=? (path->string (syntax-source source-aux))
                                                                        (path->string source-location))))
                         ;next one
-                        (displayln "############ Skip ############")
+                        #;(displayln "############ Skip ############")
                         (set! source-aux (car source-stack))
                         (set! source-stack (cdr source-stack))]
                        
                        [(> compare-aux lastline) ;(> next-compare lastline)
                         ;next one
-                        (displayln "############ Skip ############")
+                        #;(displayln "############ Skip ############")
                         (set! source-aux (car source-stack))
                         (set! source-stack (cdr source-stack))]
                        [(<= start compare-aux end) ;; starts in the selected place, and it is not bigger then the next one.
                         ;(set! source-aux (syntax-e source-aux))
-                        (display "FOUND IT! ")
+                        #;(display "FOUND IT! ")
                         #;(displayln source-aux)
                         (set! stop? #t)
                         (set! aux-result source-aux)]
                        [(and (>= compare-aux start) (<= compare-aux lastline)) ;;needed for Python implementation
-                        (displayln "############ Skip ############")
+                        #;(displayln "############ Skip ############")
                         (set! source-aux (car source-stack))
                         (set! source-stack (cdr source-stack))]
                        [else
