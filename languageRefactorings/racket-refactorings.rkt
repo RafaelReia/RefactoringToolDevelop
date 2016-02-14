@@ -23,17 +23,25 @@
      (set! return #'(>= a b))]
     [(not (>= a b))
      (set! return #'(< a b))]
+    [(if test-expr #f #t) (set! return #'(not test-expr))]
+    [(if test-expr #t #f) (set! return #'test-expr)]
     [(if test-expr #t else-expr)
-     (set! return #'(or test-expr else-expr))
-     #;(when (and (boolean? (eval-syntax #'test-expr)) (boolean? (eval-syntax #'else-expr)))
-       (set! return #'(or test-expr else-expr)))]
-    #;[(if test-expr #f else-expr)
-     'ok]
+     (set! return #'(or test-expr else-expr))]
+    [(if ?x ?y #f) (set! return #'(when ?x ?y))] ;;;;;;;; (if ?x ?y #f) -> (when ?x ?y) ;;Should be improved, automatic refactoring might have a deadlock
     [(if test-expr then-expr #f)
      (set! return #'(and test-expr then-expr))
      #;(when (and (boolean? (eval-syntax #'test-expr)) (boolean? (eval-syntax #'then-expr)))
        (set! return #'(and test-expr then-expr)))]
-    #;[(if test-expr then-expr #t) 'ok]
+    [(if test-expr then-expr else-expr)
+     (begin
+       #;(when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
+         (set! return #'(not test-expr))) ;;; buggyy
+       #;(when (and (syntax->datum #'then-expr) (not (syntax->datum #'else-expr)))
+         (set! return #'test-expr)) ;;;buggy
+       (when (equal? '(void) (syntax->datum #'else-expr)) 
+         (set! return #'(when test-expr then-expr)))
+       (when (equal? '(void) (syntax->datum #'then-expr)) 
+         (set! return #'(unless test-expr else-expr))))]
     [(and (< x y) (< v z))
      (when (equal? (syntax->datum #'y) (syntax->datum #'v))
        (set! return #'(< x y z)))]
@@ -45,25 +53,15 @@
     [(= (length l) 0) (set! return #'(null? l))]
     ;[(= (length l) 1) (write-back #'(singleton? l))] this does not exist?
     ;[(cons x (list y ... v)) (write-back #'(list x y ... v))]
-    [(and (and ?x ...) ?y ...) (set! return #'(and ?x ... ?y ...))] ;;;;;;;; (and (and ?x ... ) ?y...) -> (and ?x ... ?y...)
-    [(if ?x ?y #f) (set! return #'(when ?x ?y))] ;;;;;;;; (if ?x ?y #f) -> (when ?x ?y) ;;Should be improved, automatic refactoring might have a deadlock
-    [(if test-expr #f #t) (set! return #'(not test-expr))]
-    [(if test-expr #t #f) (set! return #'test-expr)]
-    [(if test-expr then-expr else-expr)
-     (begin
-       #;(when (and (not (syntax->datum #'then-expr)) (syntax->datum #'else-expr))
-         (set! return #'(not test-expr))) ;;; buggyy
-       #;(when (and (syntax->datum #'then-expr) (not (syntax->datum #'else-expr)))
-         (set! return #'test-expr)) ;;;buggy
-       (when (equal? '(void) (syntax->datum #'else-expr)) 
-         (set! return #'(when test-expr then-expr)))
-       (when (equal? '(void) (syntax->datum #'then-expr)) 
-         (set! return #'(unless test-expr else-expr))))]
+    ;[(and (and ?x ...) ?y ...) (set! return #'(and ?x ... ?y ...))] ;;;;;;;; (and (and ?x ... ) ?y...) -> (and ?x ... ?y...)
+    [(and (and ?x ...) (and ?y ...)) (set! return #'(and ?x ... ?y ...))]
+    [(and (and ?x ...) ?y ...) (set! return #'(and ?x ... ?y ...))]
+    [(and ?y ... (and ?x ...) ) (set! return #'(and ?x ... ?y ...))]
     [(when ?x (begin ?y ...)) (set! return #'(when ?x (?y ...)))] ;;;;;;; (when ?x (begin ?y ...)) -> (when ?x ?y ...)
     [(let ?x (begin ?y ...)) (set! return #'(let ?x ?y ...))] ;;;;; (let ?x (begin ?y...)) -> (let ?x ?y ...)
     [(ft (lambda (arg-aux) (ftn arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2)) (set! return #'(ft ftn arg))] ;this has a bug.
     [((lambda (arg-aux) (function arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2))  (set! return #'(function art))]
-    [(let name ((i e:expr) ...) ?y) (set! return (cons #'(define (name i ...) ?y) #'(name e ...)) )]
+    [(let* name ((i e:expr) ...) ?y) (set! return #'(define (name i ...) ?y))] ;;; Add call to the defined because otherwise it is not correct
     [_ (void)])
   
   #;(define (cond-to-if arg) ;;Improve
