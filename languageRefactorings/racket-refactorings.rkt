@@ -61,7 +61,7 @@
     [(let ?x (begin ?y ...)) (set! return #'(let ?x ?y ...))] ;;;;; (let ?x (begin ?y...)) -> (let ?x ?y ...)
     [(ft (lambda (arg-aux) (ftn arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2)) (set! return #'(ft ftn arg))] ;this has a bug.
     [((lambda (arg-aux) (function arg-aux2)) arg)  #:when (eq? (syntax-e #'arg-aux) (syntax-e #'arg-aux2))  (set! return #'(function art))]
-    [(let* name ((i e:expr) ...) ?y) (set! return #'(define (name i ...) ?y))] ;;; Add call to the defined because otherwise it is not correct
+    [(let name ((i e:expr) ...) ?y) (set! return (cons #'(define (name i ...) ?y) #'(name e ...)) )]
     [_ (void)])
   
   #;(define (cond-to-if arg) ;;Improve
@@ -137,7 +137,7 @@
 
     (unless (null? result)
       (set! return result)))
-  #;(when (void? return)
+  (when (void? return)
   #;(cond-to-if arg) ;;bugs, a lot of false positives
   (if-to-cond arg)) ;;has a slighty bug that needs to be corrected.
   return)

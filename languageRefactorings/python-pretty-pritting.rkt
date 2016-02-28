@@ -14,7 +14,7 @@
       [(py-ge arg1 arg2) #'(#,@(parse-python-to-racket #'arg1) >= #,@(parse-python-to-racket #'arg2))]
       [(py-add expr1 expr2) #`(#,@(parse-python-to-racket #'expr1) #'+ (parse-python-to-racket #'expr1))]
       [_ (displayln "fail")]))
-  (displayln "teste")
+  (displayln "in write-python")
   (parse-python-to-racket aux))
 
 ;;;;
