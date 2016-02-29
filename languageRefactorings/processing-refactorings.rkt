@@ -2,27 +2,27 @@
 (require syntax/parse)
 (require syntax/to-string)
 (require "processing-pretty-pritting.rkt")
-(provide python-parser)
+(provide processing-parser)
 ;;;;List of Processing Refactoring Rules
 
 
-(define (python-parser arg)
+(define (processing-parser arg)
    (displayln "inside processing-parser")
   (displayln arg)
   (define return (void))
   (syntax-parse arg
-     #:datum-literals (:False :True expr-stmt if py-truth)
-    [(cond ((py-truth (py-lt arg arg2)) (expr-stmt :False)) (else (expr-stmt :True)))
-     (begin
-       (write-processing #'(not (py-truth (py-lt arg arg2))))
-       (set! return (string-append "not(" (syntax->string #'(arg)) " < " (syntax->string #'(arg2)) ")" )))]
-    [(expr-stmt (if (py-truth expr) :True :False))
-          (begin (displayln "here2")
-     (set! return (write-processing #'(if (py-truth #'expr)))))]
-    
+     #:datum-literals (p-not p-declaration p-and p-or p-lt p-gt p-le p-ge)
+    [(p-not (p-gt a b))
+     (set! return #'(p-le a b))]
+    [(p-not (p-le a b))
+     (set! return #'(p-gt a b))]
+    [(p-not (p-lt a b))
+     (set! return #'(p-ge a b))]
+    [(p-not (p-ge a b))
+     (set! return #'(p-lt a b))]
     ;;(if (py-truth (py-lt 1 2)) :True :False) to (py-truth (py-lt 1 2)) to (1 < 2)
     #;[(if (py-turth (py-lt arg arg2)) :True :False)
      (displayln "fail 2")]
     ;;;;(list py-turth cond)  !!!!
-    [_ (begin (displayln "none :(" )(void))])
+    [_ (begin (displayln "none in processing :(" )(void))])
   return)
