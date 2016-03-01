@@ -7,6 +7,7 @@ else:
 
 
 print True if (1 < 2) else False
+True if (1 < 2) else False
 
 def fib(n):
   if n == 0: return 0

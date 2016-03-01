@@ -1736,9 +1736,10 @@
                 (send text delete start-selection end-selection)
                 (send text insert (pretty-format-improved aux-stx) start-selection)
                 #;(displayln (pretty-format-improved aux-stx))))))
-      (define (write-simple stx)
+      (define (write-simple stx) ;;Geral output
+        (displayln (format "~.a" (syntax->datum stx)))
         (send text delete start-selection end-selection)
-        (send text insert stx start-selection 'same)
+        (send text insert (format "~.a" (syntax->datum stx)) start-selection)
         (displayln stx))
       
       (define (search-refactorings-highlight start)

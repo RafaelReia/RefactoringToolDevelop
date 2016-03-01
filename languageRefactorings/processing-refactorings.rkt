@@ -13,13 +13,13 @@
   (syntax-parse arg
      #:datum-literals (p-not p-declaration p-and p-or p-lt p-gt p-le p-ge)
     [(p-not (p-gt a b))
-     (set! return #'(p-le a b))]
+     (set! return (write-processing #'(p-le a b)))]
     [(p-not (p-le a b))
-     (set! return #'(p-gt a b))]
+     (set! return (write-processing #'(p-gt a b)))]
     [(p-not (p-lt a b))
-     (set! return #'(p-ge a b))]
+     (set! return (write-processing #'(p-ge a b)))]
     [(p-not (p-ge a b))
-     (set! return #'(p-lt a b))]
+     (set! return (write-processing #'(p-lt a b)))]
     ;;(if (py-truth (py-lt 1 2)) :True :False) to (py-truth (py-lt 1 2)) to (1 < 2)
     #;[(if (py-turth (py-lt arg arg2)) :True :False)
      (displayln "fail 2")]
