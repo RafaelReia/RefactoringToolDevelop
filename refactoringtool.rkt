@@ -29,6 +29,7 @@
          "languageRefactorings/racket-refactorings.rkt"
          "languageRefactorings/python-refactorings.rkt"
          "languageRefactorings/processing-refactorings.rkt"
+         "languageRefactorings/meta-language.rkt"
          "code-walker.rkt") 
 (provide tool@)
 (define expanded-program null)
@@ -1767,7 +1768,8 @@
             (let*(( arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
                   (racket-stx (racket-parser arg))
                   (python-stx (python-parser arg))
-                  (processing-stx (processing-parser arg)))
+                  (processing-stx (processing-parser arg))
+                  (meta-lang-stx (create-meta-lang arg)))
               (display "RACKET: ")
               (displayln racket-stx)
               (display "Python: ")
