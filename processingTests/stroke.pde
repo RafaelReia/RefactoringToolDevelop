@@ -11,7 +11,7 @@ boolean value3 =
 !(1 > 2);
 
 boolean test3 =
-(1 < 3);
+!(1 < 3);
 
 boolean alfa = true;
 

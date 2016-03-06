@@ -6,7 +6,7 @@
   (define (parse-python-to-racket aux)
     (syntax-parse aux
       #:datum-literals (:False :True expr-stmt not py-lt py-add)
-      [(not stuff) #`(not #,@(parse-python-to-racket #'stuff)) ]
+      [(py-not stuff) #`(not #,@(parse-python-to-racket #'stuff)) ]
       [(py-truth arg) #`(#,@(parse-python-to-racket #'arg)) ] ;;call with arg
       [(py-lt arg1 arg2) #'(arg1 < arg2)]
       [(py-le arg1 arg2) #'(arg1 <= arg2)]
