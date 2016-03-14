@@ -26,28 +26,44 @@
 
 (define python #f)
 (define processing #f)
-
+(define racket #f)
 (define (create-meta-lang aux)
-  (displayln "%%%%%%%%%%%%%%%%%%%%%%%%%")
   (define return null)
-
   (define (python-parser aux)
-    (displayln "^^^^^^^^")
+    ;(define-py-function :fib with-params (n)
+    ;(lambda (:n) (cond ((py-truth (py-eq :n 0)) 0) ((py-truth (py-eq :n 1)) 1) (else (py-add (py-call :fib (py-sub :n 1)) (py-call :fib (py-sub :n 2)))
+    (displayln aux)
     (syntax-parse aux
-      #:datum-literals (:False :True expr-stmt py-not py-truth py-lt py-le py-ge py-gt py-add)
+      #:datum-literals (:False :True lambda expr-stmt py-not
+                               py-eq py-truth py-lt py-le py-ge
+                               py-gt py-add define-py-function
+                               with-params cond py-call)
+      [(define-py-function name with-params (n ...) body)
+       (set! return #`(define (name n ...) #,(python-parser #'body)))] ;;small bug falta ':
+      #;[(lambda (stuff) stuff2) (displayln #'stuff2)]
+      [(lambda (stuff) (cond (case1 arg1) (case2 arg2) (else elsecase)))
+       (set! return
+             #`(cond (#,(python-parser #'case1) arg1)
+                     (#,(python-parser #'case2) arg2)
+                     (else #,(python-parser #'elsecase))))]
+      [(py-truth expr)
+       (set! return #`(#,@(python-parser #'expr)))]
+      [(py-eq arg1 arg2) (set! return #'(eq? arg1 arg2))]
+      [(py-call name arg) (set! return #`(name #,(python-parser #'arg)))]
+      [(py-call name (arg)) (set! return #`(name #,@(python-parser #'arg)))]
       [(py-not stuff) #`(not #,@(python-parser #'stuff)) ]
       [(py-truth arg) #`(#,@(python-parser #'arg)) ] ;;call with arg
       [(py-lt arg1 arg2) #`(< #,@(python-parser #'arg1) #,@(python-parser #'arg2))]
       [(py-le arg1 arg2) #`(<= #,@(python-parser #'arg1) #,@(python-parser #'arg2))]
       [(py-gt arg1 arg2) #`(> #,@(python-parser #'arg1) #,@(python-parser #'arg2))]
       [(py-ge arg1 arg2) #`(>= #,@(python-parser #'arg1) #,@(python-parser #'arg2))]
-      #;[(py-add expr1 expr2) #`(#,@(python-parser #'expr1) #'+ (python-parser #'expr1))]
+      [(py-add expr1 expr2) (set! return #`(+ #,(python-parser #'expr1) #,(python-parser #'expr2)))]
+      [(py-sub expr1 expr2) (set! return #'(- expr1 expr2))]
       ;[arg #'arg]
-      [_ (begin (set! python #f) (displayln python)(displayln "fail"))])
+      [_ (begin (set! python #f)(displayln "fail"))])
     return)
   
   (define (processing-parser aux)
-    (displayln "^^^^^^^^")
     (displayln aux)
     (syntax-parse aux
       #:datum-literals (:False :True expr-stmt p-not p-lt p-le p-gt p-ge p-add p-truth)
@@ -64,7 +80,7 @@
   (set! python #t)
   (displayln "python-parser")
   (python-parser aux)
-  (set! processing #t)
+  #;#;#;#;#;#;(set! processing #t)
   (displayln "processing-parser")
   (processing-parser aux)
   (display "processing ")
@@ -72,7 +88,6 @@
   (display "python ")
   (displayln python)
   (displayln return)
-  (displayln "%%%%%%%%%%%%%%%%%%%%%%%%%")
   return)
 
 (define (write-back-meta-lang arg)
@@ -109,3 +124,30 @@
   (cond [python (python-parser arg)]
         [processing (processing-parser arg)])
   return)
+
+(define (translator language arg)
+  (define arg-aux (create-meta-lang arg))
+  (set-all language) ;decides what language to output (might change to write-back-meta-lang)
+  (write-back-meta-lang arg-aux))
+
+(define (set-all arg)
+  (case arg
+    [(python)
+     (set! python #t)
+     (set! processing #f)
+     (set! racket #f)]
+    [(processing)
+     (set! python #f)
+     (set! processing #t)
+     (set! racket #f)]
+    [(racket)
+     (set! python #f)
+     (set! processing #f)
+     (set! racket #t)]))
+;;#<syntax:3:0 (define-py-function :fib with-params (n) (lambda (:n) (cond ((py-truth (py-eq :n 0)) 0) ((py-truth (py-eq :n 1)) 1) (else (py-add (py-call :fib (py-sub :n 1)) (py-call :fib (py-sub :n 2)))))))>
+;;((#%module-begin (p-function (fib-I-fn n) (let/ec return (p-block (p-if (p-lt-eq n 0) (return 0)) (p-if (p-eq n 1) (return 1)) (return (p-add (p-call #:call fib-I-fn (p-sub n 1)) (p-call #:call fib-I-fn (p-sub n 2))))))) (p-initialize)))>)
+;;Test python
+#;(define arg #'(define-py-function :fib with-params (n) (lambda (:n) (cond ((py-truth (py-eq :n 0)) 0) ((py-truth (py-eq :n 1)) 1) (else (py-add (py-call :fib (py-sub :n 1)) (py-call :fib (py-sub :n 2))))))))
+#;(create-meta-lang arg)
+
+;;Test processing

@@ -13,6 +13,11 @@
       [(p-gt arg1 arg2) #'(arg1 > arg2)]
       [(p-ge arg1 arg2) #'(#,@(parse-processing-to-racket #'arg1) >= #,@(parse-processing-to-racket #'arg2))]
       [(p-add expr1 expr2) #`(#,@(parse-processing-to-racket #'expr1) #'+ (parse-processing-to-racket #'expr1))]
+      [(p-function (name arg ...) body) #`(int name {#,@(parse-processing-to-racket #'body)})]
+      
       [_ (displayln "fail")]))
   (displayln "in write-processing")
   (parse-processing-to-racket aux))
+
+
+;(p-function (fib-I-fn n) (let/ec return (p-block (p-if (p-lt-eq n 0) (return 0)) (p-if (p-eq n 1) (return 1)) (return (p-add (p-call #:call fib-I-fn (p-sub n 1)) (p-call #:call fib-I-fn (p-sub n 2))))))) (p-initialize)))>
