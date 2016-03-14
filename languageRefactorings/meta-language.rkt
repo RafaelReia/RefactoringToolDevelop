@@ -38,10 +38,9 @@
                                py-eq py-truth py-lt py-le py-ge
                                py-gt py-add define-py-function
                                with-params cond py-call)
-      [(define-py-function name with-params (n ...) body)
+      [(define-py-function name with-params (n1 ...) (lambda (n ...) body))
        (set! return #`(define (name n ...) #,(python-parser #'body)))] ;;small bug falta ':
-      #;[(lambda (stuff) stuff2) (displayln #'stuff2)]
-      [(lambda (stuff) (cond (case1 arg1) (case2 arg2) (else elsecase)))
+      [(cond (case1 arg1) (case2 arg2) (else elsecase))
        (set! return
              #`(cond (#,(python-parser #'case1) arg1)
                      (#,(python-parser #'case2) arg2)
