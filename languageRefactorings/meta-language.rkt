@@ -150,3 +150,13 @@
 #;(create-meta-lang arg)
 
 ;;Test processing
+#;(define teste
+    #'(p-function (fib-I-fn n)
+                  (let/ec
+                      return
+                    (p-block (p-if (p-lt-eq n 0) (return 0))
+                             (p-if (p-eq n 1) (return 1))
+                             (return (p-add
+                                      (p-call #:call fib-I-fn (p-sub n 1))
+                                      (p-call #:call fib-I-fn (p-sub n 2))))))))
+#;(write-processing teste)

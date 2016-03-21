@@ -26,8 +26,8 @@
                              #,@(parse-processing-to-racket #'result))]
       [(p-lt-eq arg1 arg2) #'(arg1 <= arg2)]
       [(return (p-add arg1 arg2)) #`(return #,@(parse-processing-to-racket
-                                         #'(p-add arg1 arg2)) #'\;)]
-      [(return arg) #'(return arg #'\;)]
+                                         #'(p-add arg1 arg2))";")]
+      [(return arg) #'(return arg";")]
       [(p-add arg1 arg2) #`(#,@(parse-processing-to-racket #'arg1) + 
                             #,@(parse-processing-to-racket #'arg2))]
       [(p-call #:call name arg) #`(#,(parse-name-call #'name) #,(parse-processing-to-racket #'arg))]
