@@ -20,6 +20,7 @@
          racket/place
          racket/list
          racket/string
+         racket/file
          string-constants
          framework
          (prefix-in drracket:arrow: drracket/arrow)
@@ -1378,7 +1379,9 @@
             (send clear enable #t)
             (search-similar-aux))
           
-          (define (automated-refactoring start-line)
+          (define (automated-refactoring start-line #:text-location [text-location (drracket:language:make-text/pos text
+                                                                                                                    0
+                                                                                                                    (send text last-position))])
             (send text begin-edit-sequence)
             (send text insert " " (send text last-position))
             (send text delete (- (send text last-position) 1) (send text last-position))
@@ -1389,9 +1392,10 @@
                  settings
                  init-proc
                  kill-termination)
-                (drracket:language:make-text/pos text
-                                                 0
-                                                 (send text last-position))
+                #;(drracket:language:make-text/pos text
+                                                   0
+                                                   (send text last-position))
+                text-location
                 (λ (sexp loop) ;this is the "iter"
                   (cond
                     [(eof-object? sexp)
@@ -1681,7 +1685,54 @@
                (old menu editor event)
                (define-values (pos text) (send (get-definitions-text) get-pos/text event))
                
-               (create-refactoring-menu menu #f pos text))))))
+               (create-refactoring-menu menu #f pos text))))
+        (define (auto-tests)
+          #;(message-box "test 1" "Running tests here?")
+          (current-directory "/home/rafaelreia/share/racket/collects/RefactoringTool/AutoTesting/")
+          #;(define aux (find-files (lambda (a)(string-suffix? (path->string a) ".rkt")) #f))
+          (let loop ([aux (find-files (lambda (a)(string-suffix? (path->string a) ".in")) #f)])
+            (if (null? aux)
+                (displayln "end")
+                (begin
+                  ((λ ()
+                     ((drracket:eval:traverse-program/multiple
+                       #:gui-modules? #f
+                       settings
+                       init-proc
+                       kill-termination)
+                      #;(drracket:language:make-text/pos text
+                                                         0
+                                                         (send text last-position))
+                      (open-input-file (car aux))
+                      (λ (sexp loop) ;this is the "iter"
+                        (cond
+                          [(eof-object? sexp)
+                           (custodian-shutdown-all user-custodian)]
+                          [else
+                           (displayln sexp)
+                           #;(syntax-tests-refactoring sexp start-line)
+                           #;(syntax-refactoring sexp #f (get-definitions-text) 0 0 0 20 20 #t #f #f)
+                           (let ((arg2 (code-walker-special sexp (+ 1 0) (+ 1 20) (+ 1 20))))
+                             (displayln "Inside auto-tests")
+                           (define result (racket-parser arg2))
+                             (displayln result)
+                             (displayln (format "~a" (syntax->datum result)))
+                             (displayln (file->string "/home/rafaelreia/share/racket/collects/RefactoringTool/AutoTesting/testnot.out"))
+                             (displayln "before IF")
+                             (if (string=?
+                                  (format "~a" (syntax->datum result))
+                                  (file->string "/home/rafaelreia/share/racket/collects/RefactoringTool/AutoTesting/testnot.out"))
+                                 (displayln "ITS TRUEEEE")
+                                 (displayln "ITS FALSE"))
+                             ;dostuffhere
+                             )
+                           #;(parameterize ((print-syntax-width 9000))
+                             (displayln sexp))
+                           #;(displayln non-expanded-program)
+                           (loop)])) 
+                      #t)))
+                  (loop (cdr aux))))))
+        (auto-tests)))
     
     ;;;;Menus definitions (lack a better idea on how to do this)
     (define detect null)
@@ -1714,6 +1765,10 @@
             (displayln (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line))))))
     
     
+    
+    
+    (define (syntax-tests-refactoring sexp start-line)
+      (void))
     (define search-refactoring #t)
     (define (syntax-refactoring program expanded? text start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings?
                                 get-refactoring-string)
@@ -1764,27 +1819,32 @@
       
       (define (search-refactorings program start-line end-line)
         (if (= start-line end-line 0)
-            (send RefactoringOperations set-label "None Available")
+            (unless auto-refactoring?
+              (send RefactoringOperations set-label "None Available"))
             (let*(( arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
                   (racket-stx (racket-parser arg))
                   (python-stx (python-parser arg))
                   (processing-stx (processing-parser arg))
                   (meta-lang-stx (create-meta-lang arg))
                   (test-lang (meta-lang-parser arg)))
+              
+              
+              (displayln program)
               (display "RACKET: ")
               (displayln racket-stx)
               (display "Python: ")
               (displayln python-stx)
               (display "meta-refactoring ")
               (displayln test-lang)
-              (cond [(not (void? python-stx))
-                     (send RefactoringOperations set-label "PYTHON - Refactoring")]
-                    [(not (void? racket-stx))
-                     (send RefactoringOperations set-label (pretty-format (syntax->datum-improved racket-stx)))]
-                    [(not (void? processing-stx))
-                     (send RefactoringOperations set-label "Processing - Refactoring")]
-                    [else 
-                     (send RefactoringOperations set-label "None Available")])))
+              (unless auto-refactoring?
+                (cond [(not (void? python-stx))
+                       (send RefactoringOperations set-label "PYTHON - Refactoring")]
+                      [(not (void? racket-stx))
+                       (send RefactoringOperations set-label (pretty-format (syntax->datum-improved racket-stx)))]
+                      [(not (void? processing-stx))
+                       (send RefactoringOperations set-label "Processing - Refactoring")]
+                      [else 
+                       (send RefactoringOperations set-label "None Available")]))))
         (if (string=? (send RefactoringOperations get-label) "None Available")
             (send RefactoringOperations enable #f)
             (send RefactoringOperations enable #t)))
@@ -1802,22 +1862,26 @@
                   (let*(( arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
                         (racket-stx (racket-parser arg))
                         (python-stx (python-parser arg))
-                        (processing-stx (processing-parser arg)))
+                        (processing-stx (processing-parser arg))
+                        #;(arg2 (code-walker-special program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
+                        #;(auto-tests (racket-parser arg2)))
+                    #;(displayln "special")
+                    #;(displayln auto-tests)
                     (cond
-                      [(not (void? racket-stx))
-                       (display "RACKET: ")
-                       (displayln racket-stx)
-                       (write-back (racket-parser arg) arg)]
-                      [(not (void? python-stx))
-                       (display "Python: ")
-                       (displayln python-stx)
-                       (write-simple python-stx)]
-                      [(not (void? processing-stx))
-                       (display "Processing: ")
-                       (displayln processing-stx)
-                        (write-simple processing-stx)]
-                      [else 
-                       (send RefactoringOperations set-label "None Available")]))
+                        [(not (void? racket-stx))
+                         (display "RACKET: ")
+                         (displayln racket-stx)
+                         (write-back (racket-parser arg) arg)]
+                        [(not (void? python-stx))
+                         (display "Python: ")
+                         (displayln python-stx)
+                         (write-simple python-stx)]
+                        [(not (void? processing-stx))
+                         (display "Processing: ")
+                         (displayln processing-stx)
+                         (write-simple processing-stx)]
+                        [else 
+                         (send RefactoringOperations set-label "None Available")]))
                   #;(begin
                       (set! arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
                       (displayln "arg")
