@@ -1714,20 +1714,24 @@
                            #;(syntax-refactoring sexp #f (get-definitions-text) 0 0 0 20 20 #t #f #f)
                            (let ((arg2 (code-walker-special sexp (+ 1 0) (+ 1 20) (+ 1 20))))
                              (displayln "Inside auto-tests")
-                           (define result (racket-parser arg2))
+                             (define result (racket-parser arg2))
                              (displayln result)
                              (displayln (format "~a" (syntax->datum result)))
-                             (displayln (file->string "/home/rafaelreia/share/racket/collects/RefactoringTool/AutoTesting/testnot.out"))
-                             (displayln "before IF")
-                             (if (string=?
-                                  (format "~a" (syntax->datum result))
-                                  (file->string "/home/rafaelreia/share/racket/collects/RefactoringTool/AutoTesting/testnot.out"))
-                                 (displayln "ITS TRUEEEE")
-                                 (displayln "ITS FALSE"))
-                             ;dostuffhere
-                             )
+                             #;(displayln (file->string "/home/rafaelreia/share/racket/collects/RefactoringTool/AutoTesting/testnot.out"))
+                             #;(displayln (file->string (string-append (string-trim (format "~a" (car aux)) ".in") ".out")))
+                             #;(displayln "before IF")
+                             (if (file-exists? (string-append (string-trim (format "~a" (car aux)) ".in") ".out"))
+                                 (if (string=?
+                                      (format "~a" (syntax->datum result))
+                                      (file->string (string-append (string-trim (format "~a" (car aux)) ".in") ".out")))
+                                     (displayln "ITS TRUEEEE")
+                                     (displayln "ITS FALSE"))
+                                 (let ((out (open-output-file (string-append (string-trim (format "~a" (car aux)) ".in") ".out"))))
+                                   (displayln "file do not exists, creating a new one")
+                                   (write (format "~a" (syntax->datum result)) out)
+                                   (close-output-port out))))
                            #;(parameterize ((print-syntax-width 9000))
-                             (displayln sexp))
+                               (displayln sexp))
                            #;(displayln non-expanded-program)
                            (loop)])) 
                       #t)))
@@ -1868,20 +1872,20 @@
                     #;(displayln "special")
                     #;(displayln auto-tests)
                     (cond
-                        [(not (void? racket-stx))
-                         (display "RACKET: ")
-                         (displayln racket-stx)
-                         (write-back (racket-parser arg) arg)]
-                        [(not (void? python-stx))
-                         (display "Python: ")
-                         (displayln python-stx)
-                         (write-simple python-stx)]
-                        [(not (void? processing-stx))
-                         (display "Processing: ")
-                         (displayln processing-stx)
-                         (write-simple processing-stx)]
-                        [else 
-                         (send RefactoringOperations set-label "None Available")]))
+                      [(not (void? racket-stx))
+                       (display "RACKET: ")
+                       (displayln racket-stx)
+                       (write-back (racket-parser arg) arg)]
+                      [(not (void? python-stx))
+                       (display "Python: ")
+                       (displayln python-stx)
+                       (write-simple python-stx)]
+                      [(not (void? processing-stx))
+                       (display "Processing: ")
+                       (displayln processing-stx)
+                       (write-simple processing-stx)]
+                      [else 
+                       (send RefactoringOperations set-label "None Available")]))
                   #;(begin
                       (set! arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
                       (displayln "arg")
