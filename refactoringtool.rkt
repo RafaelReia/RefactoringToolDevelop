@@ -31,6 +31,8 @@
          "languageRefactorings/python-refactorings.rkt"
          "languageRefactorings/processing-refactorings.rkt"
          "languageRefactorings/meta-language.rkt"
+         "languageRefactorings/python-pretty-pritting.rkt"
+         "languageRefactorings/processing-pretty-pritting.rkt"
          "code-walker.rkt") 
 (provide tool@)
 (define expanded-program null)
@@ -1570,7 +1572,7 @@
                 (new separator-menu-item% [parent menu]))))
           (define refactoring-menu
             (make-object menu%
-              "Refactoring Test Plugin"
+              "Refactoring Operations"
               menu))
           (set! RefactoringOperations 
                 (make-object menu-item%
@@ -1647,7 +1649,8 @@
             (displayln (send text get-text))
             (make-object menu-item%
               "Extract Function"
-              menu
+              ;menu
+              refactoring-menu
               (λ (item evt)
                 (let ([frame-parent (find-menu-parent menu)])
                   ; (what-is? menu) is an editor
@@ -1655,7 +1658,7 @@
                   (displayln end-selection)
                   (extract-function make-identifiers-hash binding-identifiers
                                     frame-parent text start-selection end-selection binding-aux)))))
-          (make-object menu-item%
+          #;(make-object menu-item%
             "Extract Function"
             menu
             (λ (item evt)
@@ -1806,11 +1809,34 @@
         #;(read)
         (displayln start)
         (displayln last-line)
-        (define aux (code-walker-non-expanded program (+ 1 start) (+ 1 last-line) (+ 1 last-line)))
-        (unless (void? (racket-parser aux))
+        (define aux (code-walker-non-expanded program start (+ 1 last-line) (+ 1 last-line)))
+        #;(let*(( arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
+                        (racket-stx (racket-parser arg))
+                        (python-stx (python-parser arg))
+                        (processing-stx (processing-parser arg)))
+          (void))
+        (define arg2 (code-walker-non-expanded program start 10 10))
+        (unless (and (void? (python-parser aux)) (void? (processing-parser aux)) (void? (racket-parser aux)))
           (displayln "SYNTAX FOUND")
+          #;(displayln aux)
+          #;(read)
           (parameterize ((print-syntax-width 9000))
             (displayln aux))
+
+          (unless (and (void? (python-parser aux)) (void? (processing-parser aux)))
+            (unless (void? (python-parser aux))
+              (displayln (format "~.a" (syntax->datum (write-python aux))))
+              #;(read)
+            (send text highlight-range (- (syntax-position aux) 1)
+                    (+ (string-length (format "~.a" (syntax->datum (write-python aux)))) (syntax-position aux))
+                    (make-object color% 0 255 0 0.35) #:key 'key))
+            (unless (void? (processing-parser aux))
+              (displayln (format "~.a" (syntax->datum (write-processing aux))))
+              #;(read)
+              (send text highlight-range (- (syntax-position aux) 1)
+                    (+ (string-length (format "~.a" (syntax->datum (write-processing aux)))) (syntax-position aux))
+                    (make-object color% 0 255 0 0.35) #:key 'key))
+            (displayln "in unless"))
           (if (regexp-match #rx"(\n)" (syntax->string aux))            
               (send text highlight-range (- (syntax-position aux) 1) (+ 1 (string-length (syntax->string aux)) (syntax-position aux) 
                                                                         (length(regexp-match #rx"(\n)" (syntax->string aux))))
@@ -1822,6 +1848,10 @@
         (+ 1 start))
       
       (define (search-refactorings program start-line end-line)
+        (define (trim-string? str)
+          (if (label-string? str)
+              str
+              (substring str 0 200)))
         (if (= start-line end-line 0)
             (unless auto-refactoring?
               (send RefactoringOperations set-label "None Available"))
@@ -1842,11 +1872,11 @@
               (displayln test-lang)
               (unless auto-refactoring?
                 (cond [(not (void? python-stx))
-                       (send RefactoringOperations set-label "PYTHON - Refactoring")]
+                       (send RefactoringOperations set-label (trim-string? (format "~.a" (syntax->datum python-stx))))]
                       [(not (void? racket-stx))
-                       (send RefactoringOperations set-label (pretty-format (syntax->datum-improved racket-stx)))]
+                       (send RefactoringOperations set-label (trim-string? (format "~.a" (pretty-format (syntax->datum-improved racket-stx)))))]
                       [(not (void? processing-stx))
-                       (send RefactoringOperations set-label "Processing - Refactoring")]
+                       (send RefactoringOperations set-label (trim-string? (format "~.a" (syntax->datum processing-stx))))]
                       [else 
                        (send RefactoringOperations set-label "None Available")]))))
         (if (string=? (send RefactoringOperations get-label) "None Available")

@@ -25,4 +25,6 @@
      (displayln "fail 2")]
     ;;;;(list py-turth cond)  !!!!
     [_ (begin (displayln "none in processing :(" )(void))])
+  (displayln "debug processing")
+  (displayln return)
   return)
