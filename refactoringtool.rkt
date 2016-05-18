@@ -20,6 +20,7 @@
          racket/place
          racket/list
          racket/string
+         racket/file
          string-constants
          framework
          (prefix-in drracket:arrow: drracket/arrow)
@@ -28,6 +29,10 @@
          "online-comp.rkt"
          "languageRefactorings/racket-refactorings.rkt"
          "languageRefactorings/python-refactorings.rkt"
+         "languageRefactorings/processing-refactorings.rkt"
+         "languageRefactorings/meta-language.rkt"
+         "languageRefactorings/python-pretty-pritting.rkt"
+         "languageRefactorings/processing-pretty-pritting.rkt"
          "code-walker.rkt") 
 (provide tool@)
 (define expanded-program null)
@@ -293,7 +298,8 @@
         
         
         (define/public (syncheck:add-background-color text start fin raw-color)
-          (displayln "add-backgroud-color not implemented")
+          (void)
+          #;(displayln "add-backgroud-color not implemented")
           #;(read)
           #;(when arrow-records
               (when (is-a? text text:basic<%>)
@@ -372,14 +378,16 @@
         
         ;; syncheck:add-jump-to-definition : text start end id filename -> void
         (define/public (syncheck:add-jump-to-definition text start end id filename submods)
-          (displayln "add-jump-to-definition not implemented")
+          (void)
+          #;(displayln "add-jump-to-definition not implemented")
           #;(read)
           #;(when arrow-records
               (add-to-range/key text start end (make-def-link id filename submods) #f #f)))
         
         ;; syncheck:add-mouse-over-status : text pos-left pos-right string -> void
         (define/public (syncheck:add-mouse-over-status text pos-left pos-right str)
-          (displayln "add-mouse-over-status not implemented")
+          (void)
+          #;(displayln "add-mouse-over-status not implemented")
           #;(when arrow-records
               (add-to-range/key text pos-left pos-right 
                                 (make-tooltip-info text pos-left pos-right str)
@@ -451,14 +459,17 @@
             [`#(syncheck:add-jump-to-definition ,start ,end ,id ,filename ,submods)
              (syncheck:add-jump-to-definition defs-text start end id filename submods)]
             [`#(syncheck:add-require-open-menu ,start-pos ,end-pos ,file)
-             (displayln "require-open-menu")
+             (void)
+             #;(displayln "require-open-menu")
              #;(syncheck:add-require-open-menu defs-text start-pos end-pos file)] ;;got an error, might be useful...
             [`#(syncheck:add-docs-menu ,start-pos ,end-pos ,key ,the-label ,path ,definition-tag ,tag)
-             (displayln "add-docs-menu")
+             (void)
+             #;(displayln "add-docs-menu")
              #;(syncheck:add-docs-menu defs-text start-pos end-pos
                                        key the-label path definition-tag tag)]
             [`#(syncheck:add-definition-target ,start-pos ,end-pos ,id ,mods)
-             (displayln "add-definition-target")
+             (void)
+             #;(displayln "add-definition-target")
              #;(syncheck:add-definition-target defs-text start-pos end-pos id mods)]
             [`#(syncheck:add-id-set ,to-be-renamed/poss ,name-dup-pc ,name-dup-id)
              (void)
@@ -621,31 +632,31 @@
               (set! binding-arrows (cons arr binding-arrows))))
           (if (not the-end-pos)
               (void)
-          (for ([the-pos (in-range the-start-pos (+ the-end-pos 1))])
-            (define arrs (fetch-arrow-records the-text the-pos))
-            (when arrs
-              (for ([arrow (in-list arrs)])
-                (when (var-arrow? arrow)
-                  (cond
-                    [(and (equal? (var-arrow-start-text arrow) the-text)
-                          (<= (var-arrow-start-pos-left arrow) 
-                              the-pos 
-                              (var-arrow-start-pos-right arrow)))
-                     ;; a binding occurrence => keep it
-                     (add-binding-arrow arrow)]
-                    [else
-                     ;; a bound occurrence => find binders
-                     (for ([candidate-binder 
-                            (in-list (fetch-arrow-records (var-arrow-start-text arrow)
-                                                          (var-arrow-start-pos-left arrow)))])
-                       (when (var-arrow? candidate-binder)
-                         (when (and (equal? (var-arrow-start-text arrow) 
-                                            (var-arrow-start-text candidate-binder))
-                                    (equal? (var-arrow-start-pos-left arrow)
-                                            (var-arrow-start-pos-left candidate-binder))
-                                    (equal? (var-arrow-start-pos-right arrow)
-                                            (var-arrow-start-pos-right candidate-binder)))
-                           (add-binding-arrow candidate-binder))))]))))))
+              (for ([the-pos (in-range the-start-pos (+ the-end-pos 1))])
+                (define arrs (fetch-arrow-records the-text the-pos))
+                (when arrs
+                  (for ([arrow (in-list arrs)])
+                    (when (var-arrow? arrow)
+                      (cond
+                        [(and (equal? (var-arrow-start-text arrow) the-text)
+                              (<= (var-arrow-start-pos-left arrow) 
+                                  the-pos 
+                                  (var-arrow-start-pos-right arrow)))
+                         ;; a binding occurrence => keep it
+                         (add-binding-arrow arrow)]
+                        [else
+                         ;; a bound occurrence => find binders
+                         (for ([candidate-binder 
+                                (in-list (fetch-arrow-records (var-arrow-start-text arrow)
+                                                              (var-arrow-start-pos-left arrow)))])
+                           (when (var-arrow? candidate-binder)
+                             (when (and (equal? (var-arrow-start-text arrow) 
+                                                (var-arrow-start-text candidate-binder))
+                                        (equal? (var-arrow-start-pos-left arrow)
+                                                (var-arrow-start-pos-left candidate-binder))
+                                        (equal? (var-arrow-start-pos-right arrow)
+                                                (var-arrow-start-pos-right candidate-binder)))
+                               (add-binding-arrow candidate-binder))))]))))))
           
           (define identifiers-hash #f)
           (define (add-one txt start end)
@@ -680,9 +691,9 @@
                                      (var-arrow-end-pos-left arrow)
                                      (var-arrow-end-pos-right arrow))))))))))
             identifiers-hash)
-           (if (not the-end-pos)
+          (if (not the-end-pos)
               (values null null)
-          (values binding-arrows get-identifiers-hash)))
+              (values binding-arrows get-identifiers-hash)))
         
         ;; sort-and-merge : (listof (cons number number)) -> (listof (cons number number))
         ;; the result is guaranteed to be non-overlapping ranges, 
@@ -853,8 +864,8 @@
               (define (create-call-method method-name)
                 (if python?
                     (string-append method-name "( " (string-append*  (add-between (string-split (get-args)) ",")) ")")
-                (string-append "(" method-name " " (get-args) ")")))
-
+                    (string-append "(" method-name " " (get-args) ")")))
+              
               (define (check-arrow var-arrow)
                 (define start-selection (send text get-start-position))
                 (define end-selection (send text get-end-position))
@@ -947,19 +958,19 @@
                 (send text cut #f 0 last-pos (send text last-position))) ; time stamp might fail really hard.)
               (for ([txt (in-list edit-sequence-txts)])
                 (send txt end-edit-sequence))
-
+              
               (fw:keymap:call/text-keymap-initializer
-                 (λ ()
-                   (message-box/custom ;;;Its buggy... fix this
-                    (fw:gui-utils:format-literal-label "Title Extract-Function End")
-                    (fw:gui-utils:format-literal-label "The Extracted Function is now on your Clipboard")
-                    (fw:gui-utils:format-literal-label "Ok")
-                    ;(string-constant cancel)
-                    #f ;#f means that we are not using this button, maximum is 3 button
-                    #f
-                    parent
-                    '(caution default=1)
-                    #:dialog-mixin frame:focus-table-mixin)))
+               (λ ()
+                 (message-box/custom ;;;Its buggy... fix this
+                  (fw:gui-utils:format-literal-label "Title Extract-Function End")
+                  (fw:gui-utils:format-literal-label "The Extracted Function is now on your Clipboard")
+                  (fw:gui-utils:format-literal-label "Ok")
+                  ;(string-constant cancel)
+                  #f ;#f means that we are not using this button, maximum is 3 button
+                  #f
+                  parent
+                  '(caution default=1)
+                  #:dialog-mixin frame:focus-table-mixin)))
               )))
         
         ;;;;; end refactoring functions
@@ -1077,7 +1088,7 @@
                                     #:detect-refactorings [detect-refactorings? #f] #:get-refactoring-string [get-refactoring-string #f] #:check-refactorings [check-refactorings? #f])
           
           
-          (dump-arrow-records)
+          #;(dump-arrow-records)
           (displayln "end arrow")
           (define interactions-text interactions)
           ;;;;;;;;;;;;;;;;;; Editor information
@@ -1370,7 +1381,9 @@
             (send clear enable #t)
             (search-similar-aux))
           
-          (define (automated-refactoring start-line)
+          (define (automated-refactoring start-line #:text-location [text-location (drracket:language:make-text/pos text
+                                                                                                                    0
+                                                                                                                    (send text last-position))])
             (send text begin-edit-sequence)
             (send text insert " " (send text last-position))
             (send text delete (- (send text last-position) 1) (send text last-position))
@@ -1381,9 +1394,10 @@
                  settings
                  init-proc
                  kill-termination)
-                (drracket:language:make-text/pos text
-                                                 0
-                                                 (send text last-position))
+                #;(drracket:language:make-text/pos text
+                                                   0
+                                                   (send text last-position))
+                text-location
                 (λ (sexp loop) ;this is the "iter"
                   (cond
                     [(eof-object? sexp)
@@ -1508,7 +1522,7 @@
                          (displayln "#####################")
                          (displayln loop)
                          (displayln sexp))
-                       (displayln (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings? get-refactoring-string))
+                       #;(displayln (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings? get-refactoring-string))
                        (set! result (syntax-refactoring sexp #f (get-definitions-text) start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings? get-refactoring-string))
                        (loop)])) 
                   #t)))
@@ -1523,12 +1537,12 @@
                 refactoring-menu
                 (λ (item evt)
                   (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #t))))
-        (make-object menu-item%
-          ;(get-refactoring-string)
-          "Check Refactoring"
-          refactoring-menu
-          (λ (item evt)
-            (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #f #:check-refactorings #t)))
+        #;(make-object menu-item%
+            ;(get-refactoring-string)
+            "Check Refactoring"
+            refactoring-menu
+            (λ (item evt)
+              (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #f #:check-refactorings #t)))
         
         (set! clear 
               (make-object menu-item%
@@ -1558,7 +1572,7 @@
                 (new separator-menu-item% [parent menu]))))
           (define refactoring-menu
             (make-object menu%
-              "Refactoring Test Plugin"
+              "Refactoring Operations"
               menu))
           (set! RefactoringOperations 
                 (make-object menu-item%
@@ -1566,14 +1580,14 @@
                   refactoring-menu
                   (λ (item evt)
                     (refactoring-syntax (get-current-tab) (get-interactions-text) #f))))
-          (set! printPythonmenu 
+          #;(set! printPythonmenu 
                 (make-object menu-item%
                   "Print non expanded form"
                   refactoring-menu
                   (λ (item evt)
                     (printPython (get-current-tab) (get-interactions-text) #f))))
           (add-sep)
-          (make-object menu-item%
+          #;(make-object menu-item%
             "Print expanded form"
             refactoring-menu
             (λ (item evt)
@@ -1635,7 +1649,8 @@
             (displayln (send text get-text))
             (make-object menu-item%
               "Extract Function"
-              menu
+              ;menu
+              refactoring-menu
               (λ (item evt)
                 (let ([frame-parent (find-menu-parent menu)])
                   ; (what-is? menu) is an editor
@@ -1643,16 +1658,16 @@
                   (displayln end-selection)
                   (extract-function make-identifiers-hash binding-identifiers
                                     frame-parent text start-selection end-selection binding-aux)))))
-          (make-object menu-item%
-              "Extract Function"
-              menu
-              (λ (item evt)
-                (let ([frame-parent (find-menu-parent menu)])
-                  ; (what-is? menu) is an editor
-                  (displayln start-selection)
-                  (displayln end-selection)
-                  (extract-function make-identifiers-hash binding-identifiers
-                                    frame-parent text start-selection end-selection binding-aux #:python? #t))))
+          #;(make-object menu-item%
+            "Extract Function"
+            menu
+            (λ (item evt)
+              (let ([frame-parent (find-menu-parent menu)])
+                ; (what-is? menu) is an editor
+                (displayln start-selection)
+                (displayln end-selection)
+                (extract-function make-identifiers-hash binding-identifiers
+                                  frame-parent text start-selection end-selection binding-aux #:python? #t))))
           
           (displayln "$$$$$$$$$$$$$$$$$$$$$$$$$$ LABEL")
           (displayln (send RefactoringOperations get-label))
@@ -1673,7 +1688,58 @@
                (old menu editor event)
                (define-values (pos text) (send (get-definitions-text) get-pos/text event))
                
-               (create-refactoring-menu menu #f pos text))))))
+               (create-refactoring-menu menu #f pos text))))
+        (define (auto-tests)
+          #;(message-box "test 1" "Running tests here?")
+          (current-directory "/home/rafaelreia/share/racket/collects/RefactoringTool/AutoTesting/")
+          #;(define aux (find-files (lambda (a)(string-suffix? (path->string a) ".rkt")) #f))
+          (let loop ([aux (find-files (lambda (a)(string-suffix? (path->string a) ".in")) #f)])
+            (if (null? aux)
+                (displayln "end")
+                (begin
+                  ((λ ()
+                     ((drracket:eval:traverse-program/multiple
+                       #:gui-modules? #f
+                       settings
+                       init-proc
+                       kill-termination)
+                      #;(drracket:language:make-text/pos text
+                                                         0
+                                                         (send text last-position))
+                      (open-input-file (car aux))
+                      (λ (sexp loop) ;this is the "iter"
+                        (cond
+                          [(eof-object? sexp)
+                           (custodian-shutdown-all user-custodian)]
+                          [else
+                           (displayln sexp)
+                           #;(syntax-tests-refactoring sexp start-line)
+                           #;(syntax-refactoring sexp #f (get-definitions-text) 0 0 0 20 20 #t #f #f)
+                           (let ((arg2 (code-walker-special sexp (+ 1 0) (+ 1 20) (+ 1 20))))
+                             (displayln "Inside auto-tests")
+                             (define result (racket-parser arg2))
+                             (displayln result)
+                             (displayln (format "~a" (syntax->datum result)))
+                             #;(displayln (file->string "/home/rafaelreia/share/racket/collects/RefactoringTool/AutoTesting/testnot.out"))
+                             #;(displayln (file->string (string-append (string-trim (format "~a" (car aux)) ".in") ".out")))
+                             #;(displayln "before IF")
+                             (if (file-exists? (string-append (string-trim (format "~a" (car aux)) ".in") ".out"))
+                                 (if (string=?
+                                      (format "~a" (syntax->datum result))
+                                      (file->string (string-append (string-trim (format "~a" (car aux)) ".in") ".out")))
+                                     (displayln "ITS TRUEEEE")
+                                     (displayln "ITS FALSE"))
+                                 (let ((out (open-output-file (string-append (string-trim (format "~a" (car aux)) ".in") ".out"))))
+                                   (displayln "file do not exists, creating a new one")
+                                   (write (format "~a" (syntax->datum result)) out)
+                                   (close-output-port out))))
+                           #;(parameterize ((print-syntax-width 9000))
+                               (displayln sexp))
+                           #;(displayln non-expanded-program)
+                           (loop)])) 
+                      #t)))
+                  (loop (cdr aux))))))
+        (auto-tests)))
     
     ;;;;Menus definitions (lack a better idea on how to do this)
     (define detect null)
@@ -1681,6 +1747,22 @@
     (define AutomaticRefactoring null)
     (define RefactoringOperations null)
     (define printPythonmenu null)
+    
+    (define (pretty-format-improved stx)
+      (define (walk-list stx)
+        (displayln "not-implemented!")
+        (read))
+      (cond [(pair? stx) (string-append (pretty-format(syntax->datum (car stx))) (pretty-format (syntax->datum (cdr stx))))]
+            [(list? stx) (walk-list stx)]
+            [else (pretty-format (syntax->datum stx))]))
+    (define (syntax->datum-improved stx)
+      (define (walk-list stx)
+        (displayln "not-implemented!")
+        (read))
+      
+      (cond [(pair? stx) `(,@(syntax->datum (car stx)) (syntax->datum (cdr stx)))]
+            [(list? stx) (walk-list stx)]
+            [else (syntax->datum stx)]))
     
     (define (print-languages-syntax program expanded? text start-selection end-selection start-line end-line last-line)
       (displayln "print-languages")
@@ -1690,6 +1772,10 @@
             (displayln (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line))))))
     
     
+    
+    
+    (define (syntax-tests-refactoring sexp start-line)
+      (void))
     (define search-refactoring #t)
     (define (syntax-refactoring program expanded? text start-selection end-selection start-line end-line last-line auto-refactoring? detect-refactorings?
                                 get-refactoring-string)
@@ -1705,26 +1791,55 @@
               (parameterize ((print-as-expression #f)
                              (pretty-print-columns 80))
                 (send text delete (- (syntax-position aux) 1) (+ 3 (string-length (syntax->string aux)) (syntax-position aux)))
-                (send text insert (pretty-format (syntax->datum aux-stx)) (- (syntax-position aux) 1))
-                (displayln (pretty-format (syntax->datum aux-stx)))))
+                (send text insert (pretty-format-improved aux-stx) (- (syntax-position aux) 1))
+                (displayln (pretty-format-improved aux-stx))))
             (unless (void? aux-stx)
               (parameterize ((print-as-expression #f)
                              (pretty-print-columns 80))
                 (send text delete start-selection end-selection)
-                (send text insert (pretty-format (syntax->datum aux-stx)) start-selection)
-                #;(displayln (pretty-format (syntax->datum aux-stx)))))))
-      (define (write-python stx)
+                (send text insert (pretty-format-improved aux-stx) start-selection)
+                #;(displayln (pretty-format-improved aux-stx))))))
+      (define (write-simple stx) ;;Geral output
+        (displayln (format "~.a" (syntax->datum stx)))
         (send text delete start-selection end-selection)
-        (send text insert stx start-selection 'same)
+        (send text insert (format "~.a" (syntax->datum stx)) start-selection)
         (displayln stx))
       
       (define (search-refactorings-highlight start)
+        #;(read)
         (displayln start)
         (displayln last-line)
-        (define aux (code-walker-non-expanded program (+ 1 start) (+ 1 last-line) (+ 1 last-line)))
-        (unless (void? (racket-parser aux))
+        (define aux (code-walker-non-expanded program start (+ 1 last-line) (+ 1 last-line)))
+        #;(let*(( arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
+                        (racket-stx (racket-parser arg))
+                        (python-stx (python-parser arg))
+                        (processing-stx (processing-parser arg)))
+          (void))
+        (define arg2 (code-walker-non-expanded program start 10 10))
+        (unless (and (void? (python-parser aux)) (void? (processing-parser aux)) (void? (racket-parser aux)))
+          (displayln "SYNTAX FOUND")
+          #;(read)
+          #;(displayln aux)
+          #;(read)
+          (parameterize ((print-syntax-width 9000))
+            (displayln aux))
+
+          (unless (and (void? (python-parser aux)) (void? (processing-parser aux)))
+            (unless (void? (python-parser aux))
+              (displayln (format "~.a" (syntax->datum (write-python aux))))
+              #;(read)
+            (send text highlight-range (- (syntax-position aux) 1)
+                    (+ (string-length (format "~.a" (syntax->datum (write-python aux)))) (syntax-position aux))
+                    (make-object color% 0 255 0 0.35) #:key 'key))
+            (unless (void? (processing-parser aux))
+              (displayln (format "~.a" (syntax->datum (write-processing aux))))
+              #;(read)
+              (send text highlight-range (- (syntax-position aux) 1)
+                    (+ (string-length (format "~.a" (syntax->datum (write-processing aux)))) (syntax-position aux))
+                    (make-object color% 0 255 0 0.35) #:key 'key))
+            (displayln "in unless"))
           (if (regexp-match #rx"(\n)" (syntax->string aux))            
-              (send text highlight-range (- (syntax-position aux) 1) (+ 1 (string-length (syntax->string aux)) (syntax-position aux) 
+              (send text highlight-range (- (syntax-position aux) 1) (+ 5 (string-length (syntax->string aux)) (syntax-position aux) 
                                                                         (length(regexp-match #rx"(\n)" (syntax->string aux))))
                     (make-object color% 0 255 0 0.35) #:key 'key)
               (send text highlight-range (- (syntax-position aux) 1)
@@ -1732,24 +1847,45 @@
         (displayln "loop")
         (displayln aux)
         (+ 1 start))
+      
       (define (search-refactorings program start-line end-line)
-        (if (= start-line end-line)
-            (send RefactoringOperations set-label "None Available")
+        (define (trim-string? str)
+          (if (label-string? str)
+              str
+              (substring str 0 200)))
+        (if (= start-line end-line 0)
+            (unless auto-refactoring?
+              (send RefactoringOperations set-label "None Available"))
             (let*(( arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
                   (racket-stx (racket-parser arg))
-                  (python-stx (python-parser arg)))
+                  (python-stx (python-parser arg))
+                  (processing-stx (processing-parser arg))
+                  (meta-lang-stx (create-meta-lang arg))
+                  (test-lang (meta-lang-parser arg)))
+              
+              
+              (displayln program)
               (display "RACKET: ")
               (displayln racket-stx)
               (display "Python: ")
               (displayln python-stx)
-              (if (void? python-stx)
-                  (if (void? racket-stx)
-                      (send RefactoringOperations set-label "None Available")
-                      (send RefactoringOperations set-label (pretty-format (syntax->datum racket-stx))))
-                  (send RefactoringOperations set-label "PYTHON - Refactoring"))))
+              (display "meta-refactoring ")
+              (displayln test-lang)
+              (unless auto-refactoring?
+                (parameterize ((print-as-expression #f)
+                             (pretty-print-columns 80))
+                (cond [(not (void? python-stx))
+                       (send RefactoringOperations set-label (trim-string? (format "~.a" (syntax->datum python-stx))))]
+                      [(not (void? racket-stx))
+                       (send RefactoringOperations set-label (trim-string? (format "~.a" (pretty-format (syntax->datum-improved racket-stx)))))]
+                      [(not (void? processing-stx))
+                       (send RefactoringOperations set-label (trim-string? (format "~.a" (syntax->datum processing-stx))))]
+                      [else 
+                       (send RefactoringOperations set-label "None Available")])))))
         (if (string=? (send RefactoringOperations get-label) "None Available")
             (send RefactoringOperations enable #f)
             (send RefactoringOperations enable #t)))
+      
       (if get-refactoring-string
           (search-refactorings program start-line end-line)
           (if (not detect-refactorings?)
@@ -1759,14 +1895,37 @@
                     [(call-with-values (lambda () (if test-expr then-expr else-expr)) print-values) 
                      (when (and (not (eval-syntax #'then-expr)) (eval-syntax #'else-expr))
                        (write-back #'(not test-expr)))])
-                  (begin
-                    ;;Regarding Refactoring if V2
-                    (set! arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
-                    (displayln "arg")
-                    (displayln arg)
-                    (displayln "racket-parser")
-                    (displayln (racket-parser arg))
-                    (write-back (racket-parser arg) arg)))
+                  ;;do the refactoring operations:
+                  (let*(( arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
+                        (racket-stx (racket-parser arg))
+                        (python-stx (python-parser arg))
+                        (processing-stx (processing-parser arg))
+                        #;(arg2 (code-walker-special program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
+                        #;(auto-tests (racket-parser arg2)))
+                    #;(displayln "special")
+                    #;(displayln auto-tests)
+                    (cond
+                      [(not (void? racket-stx))
+                       (display "RACKET: ")
+                       (displayln racket-stx)
+                       (write-back (racket-parser arg) arg)]
+                      [(not (void? python-stx))
+                       (display "Python: ")
+                       (displayln python-stx)
+                       (write-simple python-stx)]
+                      [(not (void? processing-stx))
+                       (display "Processing: ")
+                       (displayln processing-stx)
+                       (write-simple processing-stx)]
+                      [else 
+                       (send RefactoringOperations set-label "None Available")]))
+                  #;(begin
+                      (set! arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
+                      (displayln "arg")
+                      (displayln arg)
+                      (displayln "racket-parser")
+                      (displayln (racket-parser arg))
+                      (write-back (racket-parser arg) arg)))
               (begin
                 (if auto-refactoring?
                     (void)
@@ -1836,7 +1995,7 @@
              #;(send tab show-online-internal-error val)]
             [else
              #;(displayln "else in cond in else")
-             (displayln val)
+             #;(displayln val)
              #;(read)
              
              ;;;;;;;;;;;;;;;

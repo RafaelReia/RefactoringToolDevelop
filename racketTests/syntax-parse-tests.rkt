@@ -9,6 +9,9 @@
 (define a 1)
 (define b 2)
 (define c 3)
+
+
+
 (if (< a b)
     1
     (if (< b a )
@@ -18,6 +21,9 @@
             (if (< c a)
                 3
                 4))))
+
+
+
 (if (= (+ a b) a) 
     #f 
     #t)
