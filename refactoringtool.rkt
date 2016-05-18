@@ -10,7 +10,7 @@
          drracket/private/syncheck/syncheck-intf
          syntax/toplevel
          drracket/private/syncheck/traversals
-         (for-template racket/base) ;was a test, did not work
+         (for-template racket/base) ;was a test, did not wohirk
          syntax/to-string
          data/interval-map
          racket/set
@@ -1728,7 +1728,11 @@
                                       (format "~a" (syntax->datum result))
                                       (file->string (string-append (string-trim (format "~a" (car aux)) ".in") ".out")))
                                      (displayln "ITS TRUEEEE")
-                                     (displayln "ITS FALSE"))
+                                     (begin
+                                       (message-box "Racket - Refactoring Tool Error" (string-append "Error in test: " (format "~a" (car aux)) " is not equal to: "
+                                                                                      (string-append (string-trim (format "~a" (car aux)) ".in") ".out") )
+                                                    #f '(ok stop))
+                                       (displayln "ITS FALSE")))
                                  (let ((out (open-output-file (string-append (string-trim (format "~a" (car aux)) ".in") ".out"))))
                                    (displayln "file do not exists, creating a new one")
                                    (write (format "~a" (syntax->datum result)) out)
@@ -1838,7 +1842,7 @@
                     (make-object color% 0 255 0 0.35) #:key 'key))
             (displayln "in unless"))
           (if (regexp-match #rx"(\n)" (syntax->string aux))            
-              (send text highlight-range (- (syntax-position aux) 1) (+ 1 (string-length (syntax->string aux)) (syntax-position aux) 
+              (send text highlight-range (- (syntax-position aux) 1) (+ 5 (string-length (syntax->string aux)) (syntax-position aux) 
                                                                         (length(regexp-match #rx"(\n)" (syntax->string aux))))
                     (make-object color% 0 255 0 0.35) #:key 'key)
               (send text highlight-range (- (syntax-position aux) 1)
