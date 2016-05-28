@@ -15,7 +15,9 @@
       [(p-le arg1 arg2) #'(arg1 <= arg2)]
       [(p-gt arg1 arg2) #'(arg1 > arg2)]
       [(p-eq arg1 arg2) #'(arg1 == arg2)]
-      [(p-ge arg1 arg2) #'(#,@(parse-processing-to-racket #'arg1) >= #,@(parse-processing-to-racket #'arg2))]
+      [(p-ge arg1 arg2) #'(arg1 >= arg2)]
+      [(p-declaration (name stuff)) #`(boolean name = #,@(parse-processing-to-racket #'stuff)) ] 
+      ;[(p-ge arg1 arg2) #'(#,@(parse-processing-to-racket #'arg1) >= #,@(parse-processing-to-racket #'arg2))]
       ;[(p-add expr1 expr2) #`(#,@(parse-processing-to-racket #'expr1) #'+ (parse-processing-to-racket #'expr1))]
       [(p-function (name arg ...) body)
        #`(#,(parse-name #'name) (int arg ...)

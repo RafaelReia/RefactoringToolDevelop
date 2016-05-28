@@ -10,7 +10,7 @@
          drracket/private/syncheck/syncheck-intf
          syntax/toplevel
          drracket/private/syncheck/traversals
-         (for-template racket/base) ;was a test, did not wohirk
+         (for-template racket/base) ;was a test, did not work
          syntax/to-string
          data/interval-map
          racket/set
@@ -1101,7 +1101,7 @@
         
         (define (refactoring-syntax tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f] 
                                     #:detect-refactorings [detect-refactorings? #f]
-                                    #:get-refactoring-string [get-refactoring-string #f] #:check-refactorings [check-refactorings? #f]
+                                    #:detect-refactorings [detect-refactorings? #f] #:get-refactoring-string [get-refactoring-string #f] #:check-refactorings [check-refactorings? #f])
                                     #:call-method [call-method ""] #:body-method[body-method ""] #:parent [parent null])
           
           
@@ -1134,8 +1134,8 @@
                                      start-line end-line last-line check-refactorings?)
               (displayln "search-similar")
               (define (compare-syntax userSelected autoSelected)
-                ;;; add a boolean that compares values or not
-                ;;; end cases, a #f or userStack and autoStack both reach null at the same time
+                ;;; add a boolean that comapres values or not
+                ;;; end cases, a #f or userStacl and autoStack both reach null at the same time
                 (displayln "compare-syntax")
                 (define userStack null)
                 (define autoStack null)
@@ -1399,7 +1399,7 @@
                       (search-refactorings (+ 1 start)))))
               (displayln "before call")
               (search-refactorings start-line))
-            (define (search-similar-aux)  ;;Search used in Wide-Scope-Replacement
+            (define (search-similar-aux)
               (with-lock/edit-sequence
                text
                (λ ()
@@ -1625,6 +1625,15 @@
                 refactoring-menu
                 (λ (item evt)
                   (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #t))))
+<<<<<<< HEAD
+=======
+        #;(make-object menu-item%
+            ;(get-refactoring-string)
+            "Check Refactoring"
+            refactoring-menu
+            (λ (item evt)
+              (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #f #:check-refactorings #t)))
+>>>>>>> origin/ImprovedPreview
         
         ;;;;; Wide-Scope-Replacement
         #;(set! checkRefactoring
@@ -1685,14 +1694,14 @@
                   refactoring-menu
                   (λ (item evt)
                     (refactoring-syntax (get-current-tab) (get-interactions-text) #f))))
-          (set! printPythonmenu 
+          #;(set! printPythonmenu 
                 (make-object menu-item%
                   "Print non expanded form"
                   refactoring-menu
                   (λ (item evt)
                     (printPython (get-current-tab) (get-interactions-text) #f))))
           (add-sep)
-          (make-object menu-item%
+          #;(make-object menu-item%
             "Print expanded form"
             refactoring-menu
             (λ (item evt)
@@ -1877,6 +1886,22 @@
     (define checkRefactoring null)
     (define wideScopeDetected #f)
     #;(define wideScope null)
+    
+    (define (pretty-format-improved stx)
+      (define (walk-list stx)
+        (displayln "not-implemented!")
+        (read))
+      (cond [(pair? stx) (string-append (pretty-format(syntax->datum (car stx))) (pretty-format (syntax->datum (cdr stx))))]
+            [(list? stx) (walk-list stx)]
+            [else (pretty-format (syntax->datum stx))]))
+    (define (syntax->datum-improved stx)
+      (define (walk-list stx)
+        (displayln "not-implemented!")
+        (read))
+      
+      (cond [(pair? stx) `(,@(syntax->datum (car stx)) (syntax->datum (cdr stx)))]
+            [(list? stx) (walk-list stx)]
+            [else (syntax->datum stx)]))
     
     (define (pretty-format-improved stx)
       (define (walk-list stx)

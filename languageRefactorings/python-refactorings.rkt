@@ -13,7 +13,7 @@
   (displayln arg)
   (define return (void))
   (syntax-parse arg
-     #:datum-literals (:False :True expr-stmt if py-not py-truth :alpha :beta)
+     #:datum-literals (:False :True expr-stmt if py-not py-truth :alpha :beta cond)
     [(cond ((py-truth (py-lt arg arg2)) (expr-stmt :False)) (else (expr-stmt :True)))
      (begin
        (write-python #'(py-not (py-lt arg arg2)))
