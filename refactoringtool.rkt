@@ -818,10 +818,23 @@
               #;(send text end-edit-sequence)
               (for ([txt (in-list edit-sequence-txts)])
                 (send txt end-edit-sequence)))))
-        ;;;; Extract function
+        ;;;; Wide Scope Replacement
+        (define/private (wide-scope-replacement make-identifiers-hash binding-identifiers parent text start-selection end-selection binding-aux #:python? [python? #f])
+          (set! wideScopeDetected #f)
+          (define-values (callmethod bodymethod) (extract-function make-identifiers-hash binding-identifiers
+                                               parent text start-selection end-selection binding-aux #:python? python? #:wide-scope? #t))
+          
+
+          (displayln "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+          (displayln callmethod)
+          (displayln "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+          (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #f
+                              #:check-refactorings #t #:call-method callmethod #:body-method bodymethod #:parent parent))
         
+        ;;;; Extract function
         ;; callback for the Added-menu Extract Method
-        (define/private (extract-function make-identifiers-hash binding-identifiers parent text start-selection end-selection binding-aux #:python? [python? #f])
+        (define/private (extract-function make-identifiers-hash binding-identifiers parent text start-selection
+                                          end-selection binding-aux #:python? [python? #f] #:wide-scope? [wide-scope #f])
           (define (name-dup? x) 
             (for/or ([var-arrow (in-list binding-identifiers)])
               ((var-arrow-name-dup? var-arrow) x)))
@@ -938,40 +951,42 @@
                 ;;;TODO implement for python and other languages with returns
                 (void))
               
-              (send text begin-edit-sequence)
-              ;(displayln "begin")
-              (unless (memq text edit-sequence-txts)
-                (send text begin-edit-sequence)
-                (set! edit-sequence-txts (cons text edit-sequence-txts)))
-              ;(displayln "before delete")
-              (send text delete start-selection end-selection)
-              ;(displayln "before insert")
-              (send text insert (create-call-method new-str) start-selection)
-              ;(displayln "before move")
-              
-              ;In order to put the new changes in the clipboard
-              ;write the text in the last position of the file, then "cut" it
-              (let ([last-pos (send text last-position)])
-                (if python?
-                    (send text insert (create-method-python method-definition new-str) last-pos last-pos)
-                    (send text insert (create-method method-definition new-str) last-pos last-pos))
-                (send text cut #f 0 last-pos (send text last-position))) ; time stamp might fail really hard.)
-              (for ([txt (in-list edit-sequence-txts)])
-                (send txt end-edit-sequence))
-              
-              (fw:keymap:call/text-keymap-initializer
-               (λ ()
-                 (message-box/custom ;;;Its buggy... fix this
-                  (fw:gui-utils:format-literal-label "Title Extract-Function End")
-                  (fw:gui-utils:format-literal-label "The Extracted Function is now on your Clipboard")
-                  (fw:gui-utils:format-literal-label "Ok")
-                  ;(string-constant cancel)
-                  #f ;#f means that we are not using this button, maximum is 3 button
-                  #f
-                  parent
-                  '(caution default=1)
-                  #:dialog-mixin frame:focus-table-mixin)))
-              )))
+              (if (not wide-scope)
+                  (begin
+                    (send text begin-edit-sequence)
+                    ;(displayln "begin")
+                    (unless (memq text edit-sequence-txts)
+                      (send text begin-edit-sequence)
+                      (set! edit-sequence-txts (cons text edit-sequence-txts)))
+                    ;(displayln "before delete")
+                    (send text delete start-selection end-selection)
+                    ;(displayln "before insert")
+                    (send text insert (create-call-method new-str) start-selection)
+                    ;(displayln "before move")
+                    
+                    ;In order to put the new changes in the clipboard
+                    ;write the text in the last position of the file, then "cut" it
+                    (let ([last-pos (send text last-position)])
+                      (if python?
+                          (send text insert (create-method-python method-definition new-str) last-pos last-pos)
+                          (send text insert (create-method method-definition new-str) last-pos last-pos))
+                      (send text cut #f 0 last-pos (send text last-position))) ; time stamp might fail really hard.)
+                    (for ([txt (in-list edit-sequence-txts)])
+                      (send txt end-edit-sequence))
+                    
+                    (fw:keymap:call/text-keymap-initializer
+                     (λ ()
+                       (message-box/custom ;;;Its buggy... fix this
+                        (fw:gui-utils:format-literal-label "Title Extract-Function End")
+                        (fw:gui-utils:format-literal-label "The Extracted Function is now on your Clipboard")
+                        (fw:gui-utils:format-literal-label "Ok")
+                        ;(string-constant cancel)
+                        #f ;#f means that we are not using this button, maximum is 3 button
+                        #f
+                        parent
+                        '(caution default=1)
+                        #:dialog-mixin frame:focus-table-mixin))))
+                  (values (string-append (create-call-method new-str) "\n") (create-method method-definition new-str)))))) ;;if wide-scope return the call method!
         
         ;;;;; end refactoring functions
         
@@ -1085,7 +1100,9 @@
         
         
         (define (refactoring-syntax tab interactions refactoring? #:print-extra-info? [print-extra-info? #f] #:auto-refactoring [auto-refactoring? #f] 
-                                    #:detect-refactorings [detect-refactorings? #f] #:get-refactoring-string [get-refactoring-string #f] #:check-refactorings [check-refactorings? #f])
+                                    #:detect-refactorings [detect-refactorings? #f]
+                                    #:get-refactoring-string [get-refactoring-string #f] #:check-refactorings [check-refactorings? #f]
+                                    #:call-method [call-method ""] #:body-method[body-method ""] #:parent [parent null])
           
           
           #;(dump-arrow-records)
@@ -1117,8 +1134,8 @@
                                      start-line end-line last-line check-refactorings?)
               (displayln "search-similar")
               (define (compare-syntax userSelected autoSelected)
-                ;;; add a boolean that comapres values or not
-                ;;; end cases, a #f or userStacl and autoStack both reach null at the same time
+                ;;; add a boolean that compares values or not
+                ;;; end cases, a #f or userStack and autoStack both reach null at the same time
                 (displayln "compare-syntax")
                 (define userStack null)
                 (define autoStack null)
@@ -1226,19 +1243,91 @@
               (displayln "before code-walker")
               (define selected-expressions (code-walker program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
               (displayln "after code-walker")
-              ;;;create "rule" get essentials of the "form" (is the "best" way)
-              ;;; or dumb way, compare for exact matches
               (define (highlight-selected aux-sexp)
+                (define (replace-expressions stx-highlight)
+                  ;;receive function call already computed
+                  ;; remove syntax-span stx-hihlight
+                  ;; (- (syntax-position stx-highlight) 1)  intial
+                  ;; (+ (syntax-span stx-highlight) (syntax-position stx-highlight)) last
+                  ;; insert -> start from the end to the beginning (Hopefully is how it is implemented)
+
+                  #;(send text begin-edit-sequence)
+                    ;(displayln "begin")
+                    #;(unless (memq text edit-sequence-txts)
+                      (send text begin-edit-sequence)
+                      (set! edit-sequence-txts (cons text edit-sequence-txts)))
+                    ;(displayln "before delete")
+                    (send text delete (- (syntax-position stx-highlight) 1) (+ (syntax-span stx-highlight) (syntax-position stx-highlight)))
+                    ;(displayln "before insert")
+                    (send text insert call-method (- (syntax-position stx-highlight) 1))
+                    ;(displayln "before move")
+                    
+                    ;In order to put the new changes in the clipboard
+                    ;write the text in the last position of the file, then "cut" it
+                    (let ([last-pos (send text last-position)])
+                      #;(if python?
+                          (send text insert (create-method-python method-definition new-str) last-pos last-pos)
+                          (send text insert (create-method method-definition new-str) last-pos last-pos))
+                      (send text cut #f 0 last-pos (send text last-position))) ; time stamp might fail really hard.)
+                    #;(for ([txt (in-list edit-sequence-txts)])
+                      (send txt end-edit-sequence))
+                    
+                    #;(fw:keymap:call/text-keymap-initializer
+                     (λ ()
+                       (message-box/custom ;;;Its buggy... fix this
+                        (fw:gui-utils:format-literal-label "Title Extract-Function End")
+                        (fw:gui-utils:format-literal-label "The Extracted Function is now on your Clipboard")
+                        (fw:gui-utils:format-literal-label "Ok")
+                        ;(string-constant cancel)
+                        #f ;#f means that we are not using this button, maximum is 3 button
+                        #f
+                        parent
+                        '(caution default=1)
+                        #:dialog-mixin frame:focus-table-mixin))))
+                
                 (displayln "before traverse")
                 (displayln (length aux-sexp))
                 (define (highlight-selected-aux aux-sexp sexp)
+                  (unless (null? aux-sexp)
+                    (set! wideScopeDetected #t))
+                  (send text unhighlight-ranges/key 'key)
                   (let loop ((aux-sexp aux-sexp)
                              (sexp sexp))
+                    
                     (unless (null? aux-sexp)
                       (displayln "painting!")
                       (let ((stx-highlight (code-walker-non-expanded sexp (syntax-line (car aux-sexp)) (+ 1 last-line) (+ 1 last-line))))
-                        (send text highlight-range (syntax-position stx-highlight) 
-                              (+ 2 (string-length (syntax->string stx-highlight)) (syntax-position stx-highlight)) (make-object color% 0 255 0 0.35) #:key 'key))
+                        (if (string=? call-method "")
+                            (send text highlight-range
+                                  (- (syntax-position stx-highlight) 1)
+                                  (+ (syntax-span stx-highlight) (syntax-position stx-highlight))
+                                  (make-object color% 0 255 0 0.35) #:key 'key)
+                            (if (null? (cdr aux-sexp))
+                                (begin
+                                  (replace-expressions stx-highlight)
+                                  (let ([last-pos (send text last-position)])
+                          (send text insert body-method last-pos last-pos)
+                          ;(send text insert (create-method method-definition new-str) last-pos last-pos))
+                      (send text cut #f 0 last-pos (send text last-position))) ; time stamp might fail really hard.)
+                    #;(for ([txt (in-list edit-sequence-txts)])
+                      (send txt end-edit-sequence))
+                    
+                    (fw:keymap:call/text-keymap-initializer
+                     (λ ()
+                       (message-box/custom ;;;Its buggy... fix this
+                        (fw:gui-utils:format-literal-label "Title Extract-Function End")
+                        (fw:gui-utils:format-literal-label "The Extracted Function is now on your Clipboard")
+                        (fw:gui-utils:format-literal-label "Ok")
+                        ;(string-constant cancel)
+                        #f ;#f means that we are not using this button, maximum is 3 button
+                        #f
+                        parent
+                        '(caution default=1)
+                        #:dialog-mixin frame:focus-table-mixin)))
+
+                                  )
+                             (replace-expressions stx-highlight))))
+                      
                       (loop (cdr aux-sexp) sexp))))
                 ((λ ()
                    ((drracket:eval:traverse-program/multiple
@@ -1310,7 +1399,7 @@
                       (search-refactorings (+ 1 start)))))
               (displayln "before call")
               (search-refactorings start-line))
-            (define (search-similar-aux)
+            (define (search-similar-aux)  ;;Search used in Wide-Scope-Replacement
               (with-lock/edit-sequence
                text
                (λ ()
@@ -1496,8 +1585,7 @@
             (send text begin-edit-sequence)
             (send text insert " " (send text last-position))
             (send text delete (- (send text last-position) 1) (send text last-position))
-            (send text end-edit-sequence)
-            )
+            (send text end-edit-sequence))
           
           (when get-refactoring-string
             (let ((result "empty" )
@@ -1537,13 +1625,29 @@
                 refactoring-menu
                 (λ (item evt)
                   (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #t))))
-        #;(make-object menu-item%
-            ;(get-refactoring-string)
-            "Check Refactoring"
-            refactoring-menu
-            (λ (item evt)
-              (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #f #:check-refactorings #t)))
         
+        ;;;;; Wide-Scope-Replacement
+        #;(set! checkRefactoring
+              (make-object menu-item%
+                ;(get-refactoring-string)
+                "Check Refactoring"
+                refactoring-menu
+                (λ (item evt)
+                  (if wideScopeDetected
+                      (begin
+                        (displayln "wide Scope calling")
+                        #;(wide-scope-replacement make-identifiers-hash binding-identifiers parent text start-selection end-selection binding-aux #:python? [python? #f]))
+                      (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #f #:check-refactorings #t)))))
+        #;(set! wideScope
+                (make-object menu-item%
+                  ;(get-refactoring-string)
+                  "Do Refactoring"
+                  refactoring-menu
+                  (λ (item evt)
+                    (if wideScopeDetected
+                        (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #f #:check-refactorings #t))
+                    (void))))
+        #;(send wideScope enable #f)
         (set! clear 
               (make-object menu-item%
                 ;(get-refactoring-string)
@@ -1564,6 +1668,7 @@
         (send AutomaticRefactoring enable #t)
         
         (define (create-refactoring-menu menu bool pos text)
+          
           (define need-a-sep? (not #f))
           (define (add-sep) 
             (unless need-a-sep? 
@@ -1643,6 +1748,23 @@
                                             frame-parent (get-interactions-text ))))]))
           #;(add-sep)
           
+          ;;;;; Wide-Scope-Replacement
+          (unless (null? binding-aux)
+            (set! checkRefactoring
+                  (make-object menu-item%
+                    ;(get-refactoring-string)
+                    "Check Refactoring"
+                    refactoring-menu
+                    (λ (item evt)
+                      (if wideScopeDetected
+                          (begin
+                            (displayln "wide Scope calling")
+                            (let ([frame-parent (find-menu-parent menu)])
+                              (wide-scope-replacement make-identifiers-hash binding-identifiers frame-parent text
+                                                      start-selection end-selection binding-aux)))
+                          (refactoring-syntax (get-current-tab) (get-interactions-text) #f #:detect-refactorings #f #:check-refactorings #t))))))
+          
+          ;;;;; Extract Function
           (unless (null? binding-aux) ;binding-aux check this!
             ;(define name-to-offer (find-name-to-offer binding-identifiers))
             ;;;;aux functions
@@ -1658,16 +1780,17 @@
                   (displayln end-selection)
                   (extract-function make-identifiers-hash binding-identifiers
                                     frame-parent text start-selection end-selection binding-aux)))))
+          ;;;;;; Python Extract Function
           #;(make-object menu-item%
-            "Extract Function"
-            menu
-            (λ (item evt)
-              (let ([frame-parent (find-menu-parent menu)])
-                ; (what-is? menu) is an editor
-                (displayln start-selection)
-                (displayln end-selection)
-                (extract-function make-identifiers-hash binding-identifiers
-                                  frame-parent text start-selection end-selection binding-aux #:python? #t))))
+              "Extract Function"
+              menu
+              (λ (item evt)
+                (let ([frame-parent (find-menu-parent menu)])
+                  ; (what-is? menu) is an editor
+                  (displayln start-selection)
+                  (displayln end-selection)
+                  (extract-function make-identifiers-hash binding-identifiers
+                                    frame-parent text start-selection end-selection binding-aux #:python? #t))))
           
           (displayln "$$$$$$$$$$$$$$$$$$$$$$$$$$ LABEL")
           (displayln (send RefactoringOperations get-label))
@@ -1730,7 +1853,7 @@
                                      (displayln "ITS TRUEEEE")
                                      (begin
                                        (message-box "Racket - Refactoring Tool Error" (string-append "Error in test: " (format "~a" (car aux)) " is not equal to: "
-                                                                                      (string-append (string-trim (format "~a" (car aux)) ".in") ".out") )
+                                                                                                     (string-append (string-trim (format "~a" (car aux)) ".in") ".out") )
                                                     #f '(ok stop))
                                        (displayln "ITS FALSE")))
                                  (let ((out (open-output-file (string-append (string-trim (format "~a" (car aux)) ".in") ".out"))))
@@ -1751,6 +1874,9 @@
     (define AutomaticRefactoring null)
     (define RefactoringOperations null)
     (define printPythonmenu null)
+    (define checkRefactoring null)
+    (define wideScopeDetected #f)
+    #;(define wideScope null)
     
     (define (pretty-format-improved stx)
       (define (walk-list stx)
@@ -1815,10 +1941,10 @@
         (displayln last-line)
         (define aux (code-walker-non-expanded program start (+ 1 last-line) (+ 1 last-line)))
         #;(let*(( arg (code-walker-non-expanded program (+ 1 start-line) (+ 1 end-line) (+ 1 last-line)))
-                        (racket-stx (racket-parser arg))
-                        (python-stx (python-parser arg))
-                        (processing-stx (processing-parser arg)))
-          (void))
+                (racket-stx (racket-parser arg))
+                (python-stx (python-parser arg))
+                (processing-stx (processing-parser arg)))
+            (void))
         (define arg2 (code-walker-non-expanded program start 10 10))
         (unless (and (void? (python-parser aux)) (void? (processing-parser aux)) (void? (racket-parser aux)))
           (displayln "SYNTAX FOUND")
@@ -1826,12 +1952,12 @@
           #;(read)
           (parameterize ((print-syntax-width 9000))
             (displayln aux))
-
+          
           (unless (and (void? (python-parser aux)) (void? (processing-parser aux)))
             (unless (void? (python-parser aux))
               (displayln (format "~.a" (syntax->datum (write-python aux))))
               #;(read)
-            (send text highlight-range (- (syntax-position aux) 1)
+              (send text highlight-range (- (syntax-position aux) 1)
                     (+ (string-length (format "~.a" (syntax->datum (write-python aux)))) (syntax-position aux))
                     (make-object color% 0 255 0 0.35) #:key 'key))
             (unless (void? (processing-parser aux))
