@@ -8,6 +8,8 @@ else:
 
 print True if (1 < 2) else False
 
+True if (1 < 2) else False
+
 def fib(n):
   if n == 0: return 0
   elif n == 1: return 1
@@ -21,3 +23,13 @@ def ackermann(m,n):
     else: return ackermann(m-1, ackermann(m,n-1))
 
 print ackermann(1,1)
+
+
+def simpleAddition( a,b,c):
+    return a + b + c
+def complexFunction(a, b, c):
+    simpleAddition( a,b,c)
+    c + b - a
+
+
+

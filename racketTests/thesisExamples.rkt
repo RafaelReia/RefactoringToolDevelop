@@ -1,8 +1,18 @@
 #lang racket/base
-(cond [(< 1 2) 1]
-       [(< 2 3) 2]
-       [(< 4 5) 3]
-       [else 4])
+;;;Not
+(<= a b)
+(not (>= a b))
+(not (< a b))
+(not (<= a b))
+
+(define l (list))
+
+(= (length l) 0)
+
+(cons 1 (list 2 3 4 5 6))
+
+
+
 
 (not (> 1 2))
 
@@ -10,22 +20,8 @@
 (define b 2)
 (define c 3)
 
-
-
-(if (< a b)
-    1
-    (if (< b a )
-        2
-        (if (< a c)
-            5
-            (if (< c a)
-                3
-                4))))
-
-
-
 (if (= (+ a b) a) 
-    #f 
+    #f
     #t)
 ;;;Not
 (not (> a b))
@@ -46,7 +42,7 @@
 (and (< (foo 1) (foo 2)) (< (foo 2) 3))
 (and (> 3 2) (> 2 1))
 
-(define l (list))
+;(define l (list))
 
 (= (length l) 0)
 ;(= (length l) 1)
